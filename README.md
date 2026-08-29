@@ -157,22 +157,41 @@ When this list is non-empty it takes precedence over `QOBUZ_AUTH_TOKENS`, and th
 
 ## Architecture
 
-The codebase is organised so that each module is **deep**: a small interface with a lot of behaviour behind it, placed at a seam where something genuinely varies.
+The codebase is organised so each module is **deep**: a small interface with a
+lot of behaviour behind it, placed at a seam where something genuinely varies.
 
-| Module | Responsibility | Seam / adapters |
+| Module | Responsibility | Adapters behind the seam |
 | --- | --- | --- |
-| `lib/persisted-config.tsx` | localStorage read/validate/write rhythm, once | Storage: `localStorage` in the browser, in-memory fake in tests |
-| `lib/settings-schema.ts` | What a valid `Settings` object is | `zod` schema; `SettingsProps` is inferred from it, so type and validator cannot drift |
-| `lib/api/` | `/api/*` envelope: country header, param parsing, error mapping | Client transport is injected, so tests substitute a fake |
-| `lib/status-bar/` | Job queue: one at a time, ordered, cancellable | Queue state is owned by the module, not by React |
-| `lib/ffmpeg-functions.tsx` | Transcoding and metadata | `ffmpeg.wasm` adapter and FLAC-worker adapter behind one port |
-| `lib/search/` | Result pagination and filtering | Pure merge over `(previous, page)` |
+| `lib/persisted-config.tsx` | localStorage read/validate/write rhythm | `localStorage` in the browser, in-memory fake in tests |
+| `lib/settings-schema.ts` | What a valid `Settings` is | `zod`; `SettingsProps` is inferred from the schema |
+| `lib/api/` | `/api/*` envelope, country header, error mapping | Client transport is injected |
+| `lib/status-bar/queue.ts` | Serial job execution | Driven by promise completion, no polling |
+| `lib/transcode.ts` | Encoding decisions, argv, metadata | ffmpeg.wasm and the FLAC worker |
+| `lib/search/results.ts` | Pagination merge, skeleton count, explicit filter | Pure functions over `(previous, page)` |
 
-Conventions worth knowing before you change anything:
+Conventions worth knowing before changing anything:
 
-- **`lib/` must not import from `components/`.** Types and logic that a component displays live in `lib/`; the component imports them. This keeps `lib/` testable without mounting React.
-- **Prefer a seam with two adapters.** One adapter means the seam is hypothetical; two means it is real. If you add an interface, name the second implementation — including the test fake.
-- **Validate at the boundary.** Settings come from localStorage and catalogue data comes from Qobuz; both are untrusted and are parsed by a schema, never cast with `as`.
+- **`lib/` must not import from `components/`.** Types and logic that a view
+  displays live in `lib/`; the view imports them. This keeps `lib/` testable
+  without mounting React.
+- **Prefer a seam with two adapters.** One adapter means the seam is
+  hypothetical; two means it is real. If you add an interface, name the second
+  implementation, including the test fake.
+- **Validate at the boundary.** Settings come from localStorage and catalogue
+  data comes from Qobuz; both are untrusted and are parsed by a schema, never
+  cast with `as`.
+
+## Testing
+
+```bash
+npm test           # Vitest, run once
+npm run test:watch # Vitest, watch
+npm run typecheck  # tsc --noEmit
+```
+
+Tests live in `tests/`. Most run in a plain Node environment because the
+modules they cover do not need a DOM; name a file `*.dom.test.tsx` when it
+does.
 
 ## Contributing
 
