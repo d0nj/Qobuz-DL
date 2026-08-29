@@ -3,10 +3,10 @@ import React, { useEffect, useState } from 'react';
 import ReleaseCard from './release-card';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
-import { Disc3Icon, DiscAlbumIcon, DownloadIcon, LucideIcon, RadioTowerIcon, UsersIcon } from 'lucide-react';
+import { DownloadIcon, UsersIcon } from 'lucide-react';
 import { downloadArtistDiscography } from '@/lib/download-job';
 import { motion } from 'motion/react';
-import { parseArtistAlbumData, parseArtistData, QobuzArtist, QobuzArtistResults } from '@/lib/qobuz-dl';
+import { artistReleaseCategories, parseArtistAlbumData, parseArtistData, QobuzArtist, QobuzArtistResults, ReleaseCategory } from '@/lib/qobuz-dl';
 import { getApiClient } from '@/lib/api/client';
 import { ScrollArea, ScrollBar } from './ui/scroll-area';
 import { Skeleton } from './ui/skeleton';
@@ -18,34 +18,7 @@ import { useTheme } from 'next-themes';
 import { useCountry } from '@/lib/country-provider';
 import { toast } from 'sonner';
 
-export type CategoryType = {
-    label: string;
-    value: 'album' | 'epSingle' | 'live' | 'compilation';
-    icon: LucideIcon;
-};
 
-export const artistReleaseCategories: CategoryType[] = [
-    {
-        label: 'albums',
-        value: 'album',
-        icon: DiscAlbumIcon
-    },
-    {
-        label: 'EPs & singles',
-        value: 'epSingle',
-        icon: Disc3Icon
-    },
-    {
-        label: 'live albums',
-        value: 'live',
-        icon: RadioTowerIcon
-    },
-    {
-        label: 'compilations',
-        value: 'compilation',
-        icon: DiscAlbumIcon
-    }
-];
 
 const ArtistDialog = ({ open, setOpen, artist }: { open: boolean; setOpen: (open: boolean) => void; artist: QobuzArtist }) => {
     const [artistResults, setArtistResults] = useState<QobuzArtistResults | null>(null);
@@ -66,7 +39,10 @@ const ArtistDialog = ({ open, setOpen, artist }: { open: boolean; setOpen: (open
         }
     };
 
-    const fetchMore = async (searchField: 'album' | 'epSingle' | 'live' | 'compilation', artistResults: QobuzArtistResults) => {
+    const fetchMore = async (
+        searchField: 'album' | 'epSingle' | 'live' | 'compilation',
+        artistResults: QobuzArtistResults
+    ): Promise<QobuzArtistResults> => {
         setSearching(true);
         const data = await getApiClient().unwrap<{ items: any[]; has_more: boolean }>(getApiClient().routes.releases, {
             params: {
@@ -78,7 +54,7 @@ const ArtistDialog = ({ open, setOpen, artist }: { open: boolean; setOpen: (open
             country
         });
         const newReleases = [...artistResults!.artist.releases[searchField].items, ...data.items.map((release: any) => parseArtistAlbumData(release))];
-        setArtistResults({
+        const next: QobuzArtistResults = {
             ...artistResults!,
             artist: {
                 ...artistResults!.artist,
@@ -91,8 +67,10 @@ const ArtistDialog = ({ open, setOpen, artist }: { open: boolean; setOpen: (open
                     }
                 }
             }
-        });
+        };
+        setArtistResults(next);
         setSearching(false);
+        return next;
     };
 
     useEffect(() => {
@@ -199,14 +177,17 @@ const ArtistReleaseSection = ({
     artist: QobuzArtist;
     artistResults: QobuzArtistResults | null;
     setArtistResults: React.Dispatch<React.SetStateAction<QobuzArtistResults | null>>;
-    category: CategoryType;
+    category: ReleaseCategory;
 }) => {
     const { resolvedTheme } = useTheme();
     const [searching, setSearching] = useState(false);
     const [scrollTrigger, isInView] = useInView();
     const { country } = useCountry();
 
-    const fetchMore = async (searchField: 'album' | 'epSingle' | 'live' | 'compilation', artistResults: QobuzArtistResults) => {
+    const fetchMore = async (
+        searchField: 'album' | 'epSingle' | 'live' | 'compilation',
+        artistResults: QobuzArtistResults
+    ): Promise<QobuzArtistResults> => {
         setSearching(true);
         const data = await getApiClient().unwrap<{ items: any[]; has_more: boolean }>(getApiClient().routes.releases, {
             params: {
@@ -218,7 +199,7 @@ const ArtistReleaseSection = ({
             country
         });
         const newReleases = [...artistResults!.artist.releases[searchField].items, ...data.items.map((release: any) => parseArtistAlbumData(release))];
-        setArtistResults({
+        const next: QobuzArtistResults = {
             ...artistResults!,
             artist: {
                 ...artistResults!.artist,
@@ -231,8 +212,10 @@ const ArtistReleaseSection = ({
                     }
                 }
             }
-        });
+        };
+        setArtistResults(next);
         setSearching(false);
+        return next;
     };
 
     useEffect(() => {

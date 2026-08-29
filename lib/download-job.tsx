@@ -2,14 +2,13 @@ import axios, { AxiosError } from 'axios';
 import saveAs from 'file-saver';
 import { FFmpegType, fixMD5Hash, loadFFmpeg, ProgressReporter, transcodeTrack } from './ffmpeg-functions';
 import { codecMap, needsEncoder } from './transcode';
-import { artistReleaseCategories } from '@/components/artist-dialog';
 import { cleanFileName, formatBytes, formatCustomTitle, resizeImage } from './utils';
-import { createJob } from './status-bar/jobs';
+import { createJob, getActiveQueue } from './status-bar/jobs';
 import { Disc3Icon, DiscAlbumIcon } from 'lucide-react';
-import { FetchedQobuzAlbum, formatTitle, getFullResImageUrl, QobuzAlbum, QobuzArtistResults, QobuzTrack } from './qobuz-dl';
+import { artistReleaseCategories, FetchedQobuzAlbum, formatTitle, getFullResImageUrl, QobuzAlbum, QobuzArtistResults, QobuzTrack } from './qobuz-dl';
 import { SettingsProps } from './settings-provider';
 import { getApiClient } from '@/lib/api/client';
-import { StatusBarProps } from '@/components/status-bar/status-bar';
+import { StatusBarProps } from './status-bar/types';
 import { zipSync } from 'fflate';
 import { toast } from 'sonner';
 
@@ -34,7 +33,7 @@ export const createDownloadJob = async (
 ) => {
     if ((result as QobuzTrack).album) {
         const formattedTitle = formatCustomTitle(settings.trackName, result as QobuzTrack);
-        await createJob(setStatusBar, formattedTitle, Disc3Icon, async () => {
+        await createJob({ queue: getActiveQueue(), setStatusBar, title: formattedTitle, icon: Disc3Icon, run: async () => {
             return new Promise(async (resolve) => {
                 try {
                     const controller = new AbortController();
@@ -125,11 +124,11 @@ export const createDownloadJob = async (
                     }
                 }
             });
-        });
+        }});
     } else {
         const formattedZipTitle = formatCustomTitle(settings.zipName, result as QobuzAlbum);
 
-        await createJob(setStatusBar, formattedZipTitle, DiscAlbumIcon, async () => {
+        await createJob({ queue: getActiveQueue(), setStatusBar, title: formattedZipTitle, icon: DiscAlbumIcon, run: async () => {
             return new Promise(async (resolve) => {
                 try {
                     const controller = new AbortController();
@@ -267,7 +266,7 @@ export const createDownloadJob = async (
                     }
                 }
             });
-        });
+        }});
     }
 };
 
@@ -281,7 +280,7 @@ function proceedDownload(objectURL: string, title: string) {
 export async function downloadArtistDiscography(
     artistResults: QobuzArtistResults,
     setArtistResults: React.Dispatch<React.SetStateAction<QobuzArtistResults | null>>,
-    fetchMore: (searchField: any, artistResults: QobuzArtistResults) => Promise<void>,
+    fetchMore: (searchField: any, artistResults: QobuzArtistResults) => Promise<QobuzArtistResults>,
     type: 'album' | 'epSingle' | 'live' | 'compilation' | 'all',
     setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>,
     settings: SettingsProps,
@@ -294,21 +293,15 @@ export async function downloadArtistDiscography(
     else types = [type];
     for (const type of types) {
         while (artistResults.artist.releases[type].has_more) {
-            await fetchMore(type, artistResults);
-            artistResults = (await loadArtistResults(setArtistResults)) as QobuzArtistResults;
+            artistResults = await fetchMore(type, artistResults);
         }
         for (const release of artistResults.artist.releases[type].items) {
             await createDownloadJob(release, setStatusBar, ffmpegState, settings, undefined, undefined, country);
         }
     }
+    setArtistResults(artistResults);
     toast({
         title: `Added all ${artistReleaseCategories.find((category) => category.value === type)?.label ?? 'releases'} by '${artistResults.artist.name.display}'`,
         description: 'All releases have been added to the queue'
-    });
-}
-
-export async function loadArtistResults(setArtistResults: React.Dispatch<React.SetStateAction<QobuzArtistResults | null>>): Promise<QobuzArtistResults | null> {
-    return new Promise((resolve) => {
-        setArtistResults((prev: QobuzArtistResults | null) => (resolve(prev), prev));
     });
 }

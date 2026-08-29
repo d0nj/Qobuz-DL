@@ -1,6 +1,6 @@
 import { AxiosRequestConfig } from 'axios';
 import { getApiClient } from '@/lib/api/client';
-import { LucideIcon } from 'lucide-react';
+import { Disc3Icon, DiscAlbumIcon, LucideIcon, RadioTowerIcon } from 'lucide-react';
 
 export type APIOptionProps = Partial<
     AxiosRequestConfig & {
@@ -171,6 +171,21 @@ export type FilterDataType = {
 }[];
 
 export type QobuzSearchFilters = 'albums' | 'tracks' | 'artists';
+
+export type ReleaseCategoryValue = 'album' | 'epSingle' | 'live' | 'compilation';
+
+export type ReleaseCategory = {
+    label: string;
+    value: ReleaseCategoryValue;
+    icon: LucideIcon;
+};
+
+export const artistReleaseCategories: ReleaseCategory[] = [
+    { label: 'albums', value: 'album', icon: DiscAlbumIcon },
+    { label: 'EPs & singles', value: 'epSingle', icon: Disc3Icon },
+    { label: 'live albums', value: 'live', icon: RadioTowerIcon },
+    { label: 'compilations', value: 'compilation', icon: DiscAlbumIcon }
+];
 
 export const QOBUZ_ALBUM_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/album\/[a-zA-Z0-9]+/;
 export const QOBUZ_TRACK_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/track\/\d+/;
