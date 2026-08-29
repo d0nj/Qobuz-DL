@@ -40,7 +40,7 @@ export function createJob({ queue, setStatusBar, title, icon, run }: CreateJobAr
     const isQueued = queue.isRunning;
 
     const job = queue.enqueue(async () => {
-        setStatusBar((prev) => ({ ...prev, processing: true, open: prev.openPreference, progress: 0 }));
+        setStatusBar((prev) => ({ ...prev, processing: true, open: prev.openPreference, progress: 0, complete: false }));
         try {
             await run();
         } finally {

@@ -43,7 +43,22 @@ const StatusBar = () => {
                                     <QueueIcon className='w-4 h-4' />
                                 </Button>
                                 <div className='flex flex-col justify-center text-center items-center overflow-x-hidden px-2'>
-                                    <CardTitle className='text-nowrap max-w-full truncate p-1'>{statusBar.title || 'No items in the queue'}</CardTitle>
+                                    <motion.div layout='position' className='flex min-w-0 flex-col'>
+                                        <CardTitle className='text-nowrap max-w-full truncate p-1'>{statusBar.title || 'No items in the queue'}</CardTitle>
+                                        <AnimatePresence>
+                                            {statusBar.complete && (
+                                                <motion.p
+                                                    key='sealed'
+                                                    initial={{ opacity: 0, y: -4 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0 }}
+                                                    className='index-numeral text-primary'
+                                                >
+                                                    SAVED TO DISK — 100%
+                                                </motion.p>
+                                            )}
+                                        </AnimatePresence>
+                                    </motion.div>
                                     <AnimatePresence>
                                         {statusBar.description && (
                                             <motion.div
