@@ -7,6 +7,7 @@ import { createJob } from './status-bar/jobs';
 import { Disc3Icon, DiscAlbumIcon } from 'lucide-react';
 import { FetchedQobuzAlbum, formatTitle, getFullResImageUrl, QobuzAlbum, QobuzArtistResults, QobuzTrack } from './qobuz-dl';
 import { SettingsProps } from './settings-provider';
+import { getApiClient } from '@/lib/api/client';
 import { StatusBarProps } from '@/components/status-bar/status-bar';
 import { zipSync } from 'fflate';
 import { toast } from 'sonner';
@@ -44,14 +45,11 @@ export const createDownloadJob = async (
                     )
                         await loadFFmpeg(ffmpegState, signal);
                     setStatusBar((prev) => ({ ...prev, description: 'Fetching track size...' }));
-                    const APIResponse = await axios.get('/api/download-music', {
-                        headers: {
-                            'Token-Country': country
-                        },
+                    const { url: trackURL } = await getApiClient().unwrap<{ url: string }>(getApiClient().routes.download, {
                         params: { track_id: (result as QobuzTrack).id, quality: settings.outputQuality },
+                        country,
                         signal
                     });
-                    const trackURL = APIResponse.data.data.url;
                     const fileSizeResponse = await axios.head(trackURL, { signal });
                     const fileSize = fileSizeResponse.headers['content-length'];
                     const response = await axios.get(trackURL, {
@@ -141,15 +139,14 @@ export const createDownloadJob = async (
                         await loadFFmpeg(ffmpegState, signal);
                     setStatusBar((prev) => ({ ...prev, description: 'Fetching album data...' }));
                     if (!fetchedAlbumData) {
-                        const albumDataResponse = await axios.get('/api/get-album', {
+                        fetchedAlbumData = await getApiClient().unwrap<FetchedQobuzAlbum>(getApiClient().routes.album, {
                             params: { album_id: (result as QobuzAlbum).id },
-                            headers: { 'Token-Country': country },
+                            country,
                             signal
                         });
                         if (setFetchedAlbumData) {
-                            setFetchedAlbumData(albumDataResponse.data.data);
+                            setFetchedAlbumData(fetchedAlbumData);
                         }
-                        fetchedAlbumData = albumDataResponse.data.data;
                     }
                     const albumTracks = fetchedAlbumData!.tracks.items.map((track: QobuzTrack) => ({
                         ...track,
@@ -162,12 +159,11 @@ export const createDownloadJob = async (
                     let trackOffset = 0;
                     for (const [index, track] of albumTracks.entries()) {
                         if (track.streamable) {
-                            const fileURLResponse = await axios.get('/api/download-music', {
+                            const { url: trackURL } = await getApiClient().unwrap<{ url: string }>(getApiClient().routes.download, {
                                 params: { track_id: track.id, quality: settings.outputQuality },
-                                headers: { 'Token-Country': country },
+                                country,
                                 signal
                             });
-                            const trackURL = fileURLResponse.data.data.url;
                             if (!(currentDisk === track.media_number)) {
                                 trackOffset = albumUrls.length;
                                 currentDisk = track.media_number;
