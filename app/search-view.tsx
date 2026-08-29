@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ReleaseCard from '@/components/release-card';
 import SearchBar from '@/components/search-bar/search-bar';
 import { Button } from '@/components/ui/button';
-import { Disc3Icon, DiscAlbumIcon, UsersIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { FilterDataType, filterExplicit, QobuzAlbum, QobuzArtist, QobuzSearchFilters, QobuzSearchResults, QobuzTrack } from '@/lib/qobuz-dl';
+import { QobuzSearchFilters, QobuzSearchResults } from '@/lib/qobuz-dl';
 import { APPLICATION_NAME, IS_DEFAULT_APPLICATION_NAME } from '@/lib/app-config';
 import { getApiClient } from '@/lib/api/client';
+import { filterData, filterExplicit, hasMoreResults, isStaleResponse, mergeResults, placeholderCount } from '@/lib/search/results';
 import { getTailwindBreakpoint } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useInView } from 'react-intersection-observer';
@@ -17,25 +17,16 @@ import { useTheme } from 'next-themes';
 import CountryPicker from '@/components/country-picker';
 import { useCountry } from '@/lib/country-provider';
 
-// `value` is narrowed to the result-set keys so the pagination code can index a
-// typed `QobuzSearchResults` with it; `searchRoute` stays available.
-export const filterData: (FilterDataType[number] & { value: QobuzSearchFilters })[] = [
-    {
-        label: 'Albums',
-        value: 'albums',
-        icon: DiscAlbumIcon
-    },
-    {
-        label: 'Tracks',
-        value: 'tracks',
-        icon: Disc3Icon
-    },
-    {
-        label: 'Artists',
-        value: 'artists',
-        icon: UsersIcon
-    }
-];
+const rowsMap = {
+    sm: 3,
+    md: 5,
+    lg: 6,
+    xl: 7,
+    '2xl': 7,
+    base: 2
+};
+
+const MAX_SKELETONS = 30;
 
 const SearchView = () => {
     const { resolvedTheme } = useTheme();
@@ -48,179 +39,140 @@ const SearchView = () => {
     const { settings } = useSettings();
     const { country } = useCountry();
 
-    useEffect(() => {
-        console.log(`%c${process.env.NEXT_PUBLIC_APPLICATION_NAME}`, 'font-size: 25px; font-weight: bold;');
-        if (process.env.NEXT_PUBLIC_DISCORD) {
-            console.log(`Discord: ${process.env.NEXT_PUBLIC_DISCORD}`);
-        }
-        if (process.env.NEXT_PUBLIC_GITHUB) {
-            console.log(`GitHub: ${process.env.NEXT_PUBLIC_GITHUB}`);
-        }
-    }, []);
-
-    
     const [scrollTrigger, isInView] = useInView();
+    const inFlight = useRef<AbortController | null>(null);
+    const requestId = useRef(0);
 
-    const fetchMore = async () => {
-        if (loading) return;
-        setLoading(true);
-        const filter = filterData.find((fd) => fd.value == searchField) || filterData[0];
-        const route = filter.searchRoute ? `/api/${filter.searchRoute}` : getApiClient().routes.search;
-        // `q` is form-encoded here; the previous hand-built URL broke on any query
-        // containing `&`, `#`, `+` or non-ASCII characters.
-        const response = await getApiClient().get<QobuzSearchResults>(route, {
-            params: { q: query, offset: results![searchField].items.length },
-            country
-        });
-        if (!response.success) {
-            setLoading(false);
-            return;
-        }
-        // Handled loosely on purpose: the pagination path below nulls out items to
-        // reserve skeleton slots, which the typed `QobuzSearchResults` cannot
-        // express. (axios returned `any` here before.) The render path already
-        // treats falsy items as placeholders.
-        const data = response.data as any;
-        if (filter.searchRoute) {
-            data[searchField].items.length = Math.max(
-                data[searchField].items.length,
-                Math.min(data[searchField].limit, data[searchField].total - data[searchField].offset)
-            );
-            data[searchField].items.fill(null, data[searchField].items.length);
-            const newResults = {
-                ...results!,
-                [searchField]: {
-                    ...results![searchField],
-                    items: [...results![searchField].items, ...data[searchField].items]
-                }
-            };
-            setLoading(false);
-            if (query === data.query) setResults(newResults);
-        } else {
-            let newResults = {
-                ...results!,
-                [searchField]: {
-                    ...results!.albums,
-                    items: [...results!.albums.items, ...data.albums.items]
-                }
-            };
-            filterData.map((filter) => {
-                data[filter.value].items.length = Math.max(
-                    data[filter.value].items.length,
-                    Math.min(data[filter.value].limit, data[filter.value].total - data[filter.value].offset)
+    const routeFor = useCallback(
+        (field: QobuzSearchFilters) => {
+            const filter = filterData.find((fd) => fd.value === field) || filterData[0];
+            return filter.searchRoute ? `/api/${filter.searchRoute}` : getApiClient().routes.search;
+        },
+        []
+    );
+
+    const onSearch = useCallback(
+        async (nextQuery: string, searchFieldInput: string = searchField) => {
+            const field = searchFieldInput as QobuzSearchFilters;
+            const id = ++requestId.current;
+            inFlight.current?.abort();
+            const controller = new AbortController();
+            inFlight.current = controller;
+
+            setQuery(nextQuery);
+            setSearchError('');
+
+            try {
+                const response = await getApiClient().get<QobuzSearchResults>(
+                    routeFor(field),
+                    { params: { q: nextQuery, offset: 0 }, country, signal: controller.signal }
                 );
-                data[filter.value].items.fill(null, data[filter.value].items.length);
-                newResults = {
-                    ...newResults,
-                    [filter.value]: {
-                        ...results![filter.value as QobuzSearchFilters],
-                        items: [...results![filter.value as QobuzSearchFilters].items, ...data[filter.value].items]
-                    }
-                };
+
+                if (id !== requestId.current || controller.signal.aborted) return;
+
+                if (!response.success) {
+                    setSearchError(String(response.error ?? 'An error occurred.'));
+                    return;
+                }
+
+                if (searchField !== field) setSearchField(field);
+
+                const data = response.data;
+                const pages = data as unknown as Record<string, unknown>;
+                for (const filter of filterData) {
+                    if (!pages[filter.value]) pages[filter.value] = { items: [], limit: 0, offset: 0, total: 0 };
+                }
+                setResults(data);
+            } catch (error: any) {
+                if (controller.signal.aborted || error?.code === 'ERR_CANCELED') return;
+                setSearchError(error?.detail || error?.message || 'An error occurred.');
+            } finally {
+                if (id === requestId.current) {
+                    setLoading(false);
+                    setSearching(false);
+                }
+            }
+        },
+        [routeFor, searchField, country]
+    );
+
+    const fetchMore = useCallback(async () => {
+        if (loading) return;
+        if (!results || !hasMoreResults(results, searchField)) return;
+
+        const id = ++requestId.current;
+        setLoading(true);
+
+        try {
+            const response = await getApiClient().get<QobuzSearchResults>(routeFor(searchField), {
+                params: { q: query, offset: results[searchField].items.length },
+                country
             });
-            setLoading(false);
-            if (query === data.query) setResults(newResults);
+
+            if (id !== requestId.current) return;
+            if (!response.success) return;
+            if (isStaleResponse(query, (response.data as QobuzSearchResults | undefined)?.query)) return;
+
+            setResults((previous) => mergeResults(previous, response.data, searchField));
+        } catch {
+            // Pagination failures are not fatal: the results already on screen
+            // stay, and scrolling re-triggers the fetch.
+        } finally {
+            if (id === requestId.current) setLoading(false);
         }
-    };
+    }, [loading, results, searchField, query, country, routeFor]);
 
     useEffect(() => {
         if (searching) return;
-        if (isInView && results![searchField].total > results![searchField].items.length && !loading) fetchMore();
-        if (results?.switchTo) {
-            setSearchField(results.switchTo);
-        }
-    }, [isInView, results]);
+        if (results?.switchTo) setSearchField(results.switchTo);
+        if (!isInView || !results) return;
+        if (hasMoreResults(results, searchField)) void fetchMore();
+    }, [isInView, results, searchField, searching, fetchMore]);
+
+    useEffect(() => {
+        return () => inFlight.current?.abort();
+    }, []);
 
     const cardRef = useRef<HTMLDivElement | null>(null);
     const [cardHeight, setCardHeight] = useState<number>(0);
 
     useEffect(() => {
         const element = cardRef.current;
-
-        if (!element) {
-            return;
-        }
+        if (!element) return;
 
         const resizeObserver = new ResizeObserver((entries) => {
             for (const entry of entries) {
-                if (entry.target === element) {
-                    setCardHeight(entry.contentRect.height);
-                }
+                if (entry.target === element) setCardHeight(entry.contentRect.height);
             }
         });
 
         resizeObserver.observe(element);
-
-        return () => {
-            resizeObserver.disconnect();
-        };
+        return () => resizeObserver.disconnect();
     }, [results, settings.explicitContent, searchField]);
-
-    useLayoutEffect(() => {
-        const handleResize = () => {
-            if (typeof window !== 'undefined') {
-                setNumRows(rowsMap[getTailwindBreakpoint(window.innerWidth)]);
-            }
-        };
-
-        handleResize();
-
-        window.addEventListener('resize', handleResize);
-
-        return () => {
-            window.removeEventListener('resize', handleResize);
-        };
-    }, []);
-
-    const rowsMap = {
-        sm: 3,
-        md: 5,
-        lg: 6,
-        xl: 7,
-        '2xl': 7,
-        base: 2
-    };
 
     const [numRows, setNumRows] = useState(0);
 
-    const onSearch = async (query: string, searchFieldInput: string = searchField) => {
-        setQuery(query);
-        setSearchError('');
-        const filter = filterData.find((filter) => filter.value === searchFieldInput) || filterData[0];
-        try {
-            const route = filter.searchRoute ? `/api/${filter.searchRoute}` : getApiClient().routes.search;
-            const response = await getApiClient().get<QobuzSearchResults>(route, {
-                params: { q: query, offset: 0 },
-                country
-            });
-            if (response.success) {
-                setLoading(false);
-                if (searchField !== searchFieldInput) setSearchField(searchFieldInput as QobuzSearchFilters);
+    useLayoutEffect(() => {
+        const handleResize = () => {
+            if (typeof window !== 'undefined') setNumRows(rowsMap[getTailwindBreakpoint(window.innerWidth)]);
+        };
 
-                let newResults = { ...response.data };
-                filterData.map((filter) => {
-                    if (!newResults[filter.value])
-                        newResults = {
-                            ...newResults,
-                            [filter.value]: {
-                                total: undefined,
-                                offset: undefined,
-                                limit: undefined,
-                                items: []
-                            }
-                        };
-                });
-                setResults(newResults);
-            }
-        } catch (error: any) {
-            setSearchError(error?.detail || error.message || 'An error occurred.');
-        }
-        setSearching(false);
-    };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
-        if (country && query) onSearch(query);
+        if (country && query) void onSearch(query);
+        // Re-running only when the country changes is deliberate: `onSearch`
+        // changes identity whenever results do, which would loop.
     }, [country]);
+
+    const visible = useMemo(() => (results ? filterExplicit(results, settings.explicitContent) : null), [results, settings.explicitContent]);
+    const page = results?.[searchField];
+    const items = useMemo(() => visible?.[searchField]?.items ?? [], [visible, searchField]);
+    const skeletons = hasMoreResults(results, searchField) ? Math.min(placeholderCount(page), MAX_SKELETONS) : 0;
+
     return (
         <>
             <div className='space-y-4'>
@@ -280,49 +232,37 @@ const SearchView = () => {
                         <div
                             className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-x-4 gap-y-8 w-full px-6 overflow-visible rail-line pl-4 md:pl-8'
                             style={{
-                                maxHeight: `${(Math.ceil(filterExplicit(results, settings.explicitContent)[searchField].items.length / numRows) + 2) * (cardHeight + 16)}px`
+                                maxHeight: `${(Math.ceil(items.length / (numRows || 1)) + 2) * (cardHeight + 16)}px`
                             }}
                         >
-                            {filterExplicit(results, settings.explicitContent)[searchField].items.map(
-                                (result: QobuzAlbum | QobuzTrack | QobuzArtist, index: number) => {
-                                    if (!result) return null;
-                                    return (
-                                        <div
-                                            key={`${index}-${result.id}-${searchField}`}
-                                            className='plate-hang'
-                                            style={{ animationDelay: `${Math.min(index, 14) * 35}ms` }}
-                                        >
-                                            <ReleaseCard
-                                                result={result}
-                                                resolvedTheme={String(resolvedTheme)}
-                                                ref={index === 0 ? cardRef : null}
-                                                index={index}
-                                            />
-                                        </div>
-                                    );
-                                }
-                            )}
-                            {results![searchField].items.length < results![searchField].total &&
-                                [
-                                    ...Array(
-                                        results![searchField].total > results![searchField].items.length + 30
-                                            ? 30
-                                            : results![searchField].total - results![searchField].items.length
-                                    )
-                                ].map((_, index) => {
-                                    return (
-                                        <div key={index} className='relative w-full'>
-                                            <Skeleton
-                                                className='relative w-full aspect-square group select-none rounded-none overflow-hidden'
-                                                ref={index === 0 ? scrollTrigger : null}
-                                            />
-                                            <div className='h-[40px]'></div>
-                                        </div>
-                                    );
-                                })}
+                            {items.map((result, index) => (
+                                <div
+                                    key={`${index}-${result.id}-${searchField}`}
+                                    className='plate-hang'
+                                    style={{ animationDelay: `${Math.min(index, 14) * 35}ms` }}
+                                >
+                                    <ReleaseCard
+                                        result={result}
+                                        resolvedTheme={String(resolvedTheme)}
+                                        ref={index === 0 ? cardRef : null}
+                                        index={index}
+                                    />
+                                </div>
+                            ))}
+                            {[...Array(skeletons)].map((_, index) => (
+                                <div key={`skeleton-${index}`} className='relative w-full'>
+                                    <Skeleton
+                                        className='relative w-full aspect-square group select-none rounded-none overflow-hidden'
+                                        ref={index === 0 ? scrollTrigger : null}
+                                    />
+                                    <div className='h-[40px]'></div>
+                                </div>
+                            ))}
                         </div>
-                        {results![searchField].items.length >= results![searchField].total && (
-                            <div className='w-full h-[40px] index-numeral flex items-center justify-center pt-8'>END OF CATALOGUE — {results![searchField].total} {searchField.toUpperCase()}</div>
+                        {!hasMoreResults(results, searchField) && (
+                            <div className='w-full h-[40px] index-numeral flex items-center justify-center pt-8'>
+                                END OF CATALOGUE — {page?.total ?? items.length} {searchField.toUpperCase()}
+                            </div>
                         )}
                     </div>
                 )}

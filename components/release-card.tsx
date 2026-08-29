@@ -17,7 +17,7 @@ import {
     QobuzArtist,
     QobuzTrack
 } from '@/lib/qobuz-dl';
-import { filterData } from '@/app/search-view';
+import { filterData } from '@/lib/search/results';
 import { motion, useAnimation } from 'motion/react';
 import { ScrollArea } from './ui/scroll-area';
 import { Separator } from './ui/separator';
