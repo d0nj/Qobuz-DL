@@ -70,6 +70,8 @@ export function buildTranscodeArgs(settings: SettingsProps, inputName: string, o
  */
 export function buildMetadataText(track: QobuzTrack, upc?: string): string {
     const album = getAlbum(track);
+    if (!album) return [';FFMETADATA1', `title=${formatTitle(track)}`].join('\n');
+
     const artists = album.artists?.length ? album.artists : track.performer ? [track.performer] : [];
     const artistLine = artists.length > 0 ? formatArtists(track) : 'Various Artists';
     const releaseYear = new Date(album.release_date_original).getFullYear();

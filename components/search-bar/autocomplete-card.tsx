@@ -87,7 +87,7 @@ const AutocompleteCard = ({
                                                 </p>
                                             </div>
                                             {results?.[key as 'albums' | 'tracks'].items.slice(0, limit).map((result: QobuzAlbum | QobuzTrack, index) => {
-                                                const value = `${result.title} - ${getAlbum(result).artist.name}`;
+                                                const value = `${result.title} - ${getAlbum(result)?.artist?.name ?? ''}`;
 
                                                 return loading ? (
                                                     <Skeleton key={index} className='h-4' />
