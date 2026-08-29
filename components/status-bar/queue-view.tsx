@@ -38,7 +38,7 @@ const QueueView = ({ queueItems }: { queueItems: QueueProps[] }) => {
                                             <Progress value={statusBar.progress} />
                                         </div>
                                     </CardTitle>
-                                    <Button size='icon' variant='outline' className='size-6 bg-muted/10 hover:bg-muted' onClick={statusBar.onCancel}>
+                                    <Button size='icon' variant='outline' className='size-11 bg-muted/10 hover:bg-muted touch-manipulation' onClick={statusBar.onCancel}>
                                         <X className='size-4 shrink-0 aspect-square' />
                                     </Button>
                                 </CardHeader>

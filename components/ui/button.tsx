@@ -20,7 +20,9 @@ const buttonVariants = cva(
                 default: 'h-9 px-4 py-2',
                 sm: 'h-8 rounded-none px-3 text-xs',
                 lg: 'h-10 rounded-none px-8',
-                icon: 'h-9 w-9'
+                // 44px minimum: the 36px default is below the reachability
+                // threshold that makes icon buttons reliably hittable by thumb.
+                icon: 'h-11 w-11'
             }
         },
         defaultVariants: {
