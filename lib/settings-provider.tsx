@@ -1,83 +1,50 @@
 'use client';
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
-export type SettingsProps = {
-    particles: boolean;
-    outputQuality: '27' | '7' | '6' | '5';
-    outputCodec: 'FLAC' | 'WAV' | 'ALAC' | 'MP3' | 'AAC' | 'OPUS';
-    bitrate: number | undefined;
-    applyMetadata: boolean;
-    fixMD5: boolean;
-    explicitContent: boolean;
-    albumArtSize: number;
-    albumArtQuality: number;
-    zipName: string;
-    trackName: string;
+import React, { createContext, useMemo } from 'react';
+import { usePersistedConfig, type PersistedConfigModule } from './persisted-config';
+import { defaultSettings, parseSettings, type SettingsProps } from './settings-schema';
+
+/**
+ * Thin instantiation of the persisted-config module.
+ *
+ * Everything non-obvious — validation, the localStorage rhythm, the
+ * hydration race, cross-tab sync — lives in `persisted-config` and
+ * `settings-schema`. This file is only the wiring: a key, a default, and a
+ * validator.
+ */
+export type { SettingsProps };
+export { defaultSettings, nameVariables } from './settings-schema';
+
+const SETTINGS_KEY = 'settings';
+
+const settingsModule: PersistedConfigModule<SettingsProps> = {
+    storageKey: SETTINGS_KEY,
+    defaultValue: defaultSettings,
+    parse: parseSettings,
+    serialize: (value) => JSON.stringify(value)
 };
 
-export const nameVariables: string[] = ['artists', 'name', 'year', 'duration'];
+type SettingsContextValue = {
+    settings: SettingsProps;
+    setSettings: React.Dispatch<React.SetStateAction<SettingsProps>>;
+    resetSettings: () => void;
+};
 
-const isValidSettings = (obj: any): obj is SettingsProps => {
-    return (
-        typeof obj.particles === 'boolean' &&
-            ['27', '7', '6', '5'].includes(obj.outputQuality) &&
-            ['FLAC', 'WAV', 'ALAC', 'MP3', 'AAC', 'OPUS'].includes(obj.outputCodec) &&
-            ((typeof obj.bitrate === 'number' && obj.bitrate >= 24 && obj.bitrate <= 320) || obj.bitrate === undefined) &&
-            typeof obj.applyMetadata === 'boolean' &&
-            typeof obj.explicitContent === 'boolean' &&
-            typeof obj.fixMD5 === 'boolean' &&
-            typeof obj.albumArtSize === 'number' &&
-            obj.albumArtSize >= 100 &&
-            obj.albumArtSize <= 3600 &&
-            typeof obj.albumArtQuality === 'number' &&
-            obj.albumArtQuality >= 0.1 &&
-            obj.albumArtQuality <= 1,
-        typeof obj.zipName === 'string' && typeof obj.trackName === 'string'
+const SettingsContext = createContext<SettingsContextValue | undefined>(undefined);
+
+export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { value, setValue, reset } = usePersistedConfig(settingsModule);
+
+    const contextValue = useMemo<SettingsContextValue>(
+        () => ({ settings: value, setSettings: setValue, resetSettings: reset }),
+        [value, setValue, reset]
     );
-};
 
-const SettingsContext = createContext<
-    | {
-          settings: SettingsProps;
-          setSettings: React.Dispatch<React.SetStateAction<SettingsProps>>;
-          resetSettings: () => void;
-      }
-    | undefined
->(undefined);
-
-export const defaultSettings: SettingsProps = {
-    particles: true,
-    outputQuality: '27',
-    outputCodec: 'FLAC',
-    bitrate: 320,
-    applyMetadata: true,
-    fixMD5: false,
-    explicitContent: true,
-    albumArtSize: 3600,
-    albumArtQuality: 1,
-    zipName: '{artists} - {name}',
-    trackName: '{artists} - {name}'
-};
-
-export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [settings, setSettings] = useState<SettingsProps>(defaultSettings);
-
-    useEffect(() => {
-        const savedSettings = localStorage.getItem('settings');
-        if (savedSettings && isValidSettings(JSON.parse(savedSettings))) {
-            setSettings(JSON.parse(savedSettings));
-        }
-    }, []);
-
-    useEffect(() => {
-        localStorage.setItem('settings', JSON.stringify(settings));
-    }, [settings]);
-
-    return <SettingsContext.Provider value={{ settings, setSettings, resetSettings: () => setSettings(defaultSettings) }}>{children}</SettingsContext.Provider>;
+    return <SettingsContext.Provider value={contextValue}>{children}</SettingsContext.Provider>;
 };
 
 export const useSettings = () => {
-    const context = useContext(SettingsContext);
+    const context = React.useContext(SettingsContext);
 
     if (!context) {
         throw new Error('useSettings must be used within a SettingsProvider');

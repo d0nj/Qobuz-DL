@@ -1,39 +1,39 @@
 [
- {
-  "title": "Gallery Blackout",
-  "date": "08-29-2026",
-  "changes": [
-   "Complete visual redesign: a near-black exhibition void where releases hang as hairline plates against an off-centre rail, lit by a single acid-lime accent.",
-   "New type system: Instrument Serif wordmark, JetBrains Mono for measurements (index numerals, bit-depth, kHz), Geist for interface text.",
-   "The particle background has been replaced with a film-grain field. It can be turned off in Settings \u2192 Background.",
-   "Search is now a hairline slot that warms to lime on focus, with a lime submit button.",
-   "Results animate in with a staggered cascade and show catalogue index numerals; hover reveals technical details behind a lime edge.",
-   "Squared corner language throughout: cards, buttons, inputs, dialogs, and the download queue.",
-   "Removed the Discord link from the header; the GitHub link now points to the active fork."
-  ]
- },
- {
-  "title": "Native Country Support",
-  "date": "09-27-2025",
-  "changes": [
-   "Countries can now natively be selected from the country picker (when enabled)! Multiple instances for different countries are no longer needed."
-  ]
- },
- {
-  "title": "Custom Naming Variables & Reset Settings",
-  "date": "04-07-2025",
-  "changes": [
-   "Added custom naming variables to the settings page. You can now customise the names of downloaded tracks and zip files using special formatting options.",
-   "Added reset settings button to the bottom of the settings page."
-  ]
- },
- {
-  "title": "Change Log & PWA Support",
-  "date": "03-07-2025",
-  "changes": [
-   "Changelog added and now is used to handle updates and fixes along with Discord notifications",
-   "Added PWA support for easy access of the site on a mobile device for example with the abilty to add to the homescreen",
-   "Changed the border radius style to slightly more rounded, :)"
-  ]
- }
+    {
+        "title": "Gallery Blackout",
+        "date": "08-29-2026",
+        "changes": [
+            "Complete visual redesign: a near-black exhibition void where releases hang as hairline plates against an off-centre rail, lit by a single acid-lime accent.",
+            "New type system: Instrument Serif wordmark, JetBrains Mono for measurements (index numerals, bit-depth, kHz), Geist for interface text.",
+            "The particle background has been replaced with a film-grain field. It can be turned off in Settings \u2192 Background.",
+            "Search is now a hairline slot that warms to lime on focus, with a lime submit button.",
+            "Results animate in with a staggered cascade and show catalogue index numerals; hover reveals technical details behind a lime edge.",
+            "Squared corner language throughout: cards, buttons, inputs, dialogs, and the download queue.",
+            "Removed the Discord link from the header; the GitHub link now points to the active fork."
+        ]
+    },
+    {
+        "title": "Native Country Support",
+        "date": "09-27-2025",
+        "changes": [
+            "Countries can now natively be selected from the country picker (when enabled)! Multiple instances for different countries are no longer needed."
+        ]
+    },
+    {
+        "title": "Custom Naming Variables & Reset Settings",
+        "date": "04-07-2025",
+        "changes": [
+            "Added custom naming variables to the settings page. You can now customise the names of downloaded tracks and zip files using special formatting options.",
+            "Added reset settings button to the bottom of the settings page."
+        ]
+    },
+    {
+        "title": "Change Log & PWA Support",
+        "date": "03-07-2025",
+        "changes": [
+            "Changelog added and now is used to handle updates and fixes along with Discord notifications",
+            "Added PWA support for easy access of the site on a mobile device for example with the abilty to add to the homescreen",
+            "Changed the border radius style to slightly more rounded, :)"
+        ]
+    }
 ]

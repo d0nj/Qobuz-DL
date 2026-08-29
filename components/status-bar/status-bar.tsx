@@ -4,28 +4,16 @@ import React, { useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { ChevronDown, ChevronUp, DotIcon, List as QueueIcon, LucideIcon, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, DotIcon, List as QueueIcon, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Progress } from '../ui/progress';
 import { useStatusBar } from '@/lib/status-bar/context';
 
-export type QueueProps = {
-    title: string;
-    icon?: LucideIcon | null;
-    UUID: string;
-    remove?: () => void;
-};
-
-export type StatusBarProps = {
-    open: boolean;
-    openPreference: boolean;
-    title: string;
-    description: string;
-    progress: number;
-    processing: boolean;
-    queue?: QueueProps[];
-    onCancel?: () => void;
-};
+/**
+ * Owned by lib/status-bar/types.ts, not by the view. Re-exported so existing
+ * imports keep working while `lib/` stops depending on `components/`.
+ */
+export type { QueueProps, StatusBarProps } from '@/lib/status-bar/types';
 
 const StatusBar = () => {
     const { statusBar, setStatusBar } = useStatusBar();

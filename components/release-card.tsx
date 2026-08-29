@@ -5,21 +5,20 @@ import React, { useEffect, useState } from 'react';
 import { AlignJustifyIcon, DotIcon, DownloadIcon, UsersIcon, DiscAlbumIcon } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
-import { createDownloadJob } from '@/lib/download-job';
+import { download } from '@/lib/download-job';
+import { albumCacheOf } from '@/lib/download/request';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import {
     FetchedQobuzAlbum,
-    formatArtists,
     formatDuration,
     formatTitle,
-    getAlbum,
     getFullAlbumInfo,
-    getType,
+    describeCatalogueItem,
     QobuzAlbum,
     QobuzArtist,
     QobuzTrack
 } from '@/lib/qobuz-dl';
-import { filterData } from '@/app/search-view';
+import { filterData } from '@/lib/search/results';
 import { motion, useAnimation } from 'motion/react';
 import { ScrollArea } from './ui/scroll-area';
 import { Separator } from './ui/separator';
@@ -52,12 +51,13 @@ const ReleaseCard = ({
     const [fetchedAlbumData, setFetchedAlbumData] = useState<FetchedQobuzAlbum | null>(null);
     const [focusCard, setFocusCard] = useState(false);
 
-    const album = getAlbum(result) || null;
+    const item = describeCatalogueItem(result);
+    const album = item.album ?? null;
 
     const [imageLoaded, setImageLoaded] = useState(false);
     const imageAnimationControls = useAnimation();
 
-    const artist = (result as QobuzAlbum).artist ?? (result as QobuzTrack).performer ?? (result as QobuzTrack).composer;
+    const artist = item.artist;
 
     useEffect(() => {
         if (imageLoaded) imageAnimationControls.start({ scale: 1 });
@@ -77,38 +77,38 @@ const ReleaseCard = ({
                             : `group-hover:bg-white/35 ${focusCard && 'bg-white/35'}`
                     )}
                     onClick={() => {
-                        if (getType(result) === 'artists') setOpenArtistDialog(true);
+                        if (item.isArtist) setOpenArtistDialog(true);
                     }}
                 >
                     <div className='flex flex-col h-full justify-between'>
                         <div className='space-y-0.5 p-4 flex justify-between relative overflow-x-hidden'>
                             <div className='w-full pr-9'>
                                 <p className='text-[11px] truncate font-mono uppercase tracking-[0.14em] text-foreground/90'>
-                                    {!(getType(result) === 'artists') ? album.genre.name : (result as QobuzArtist).albums_count + ' Releases'}
+                                    {item.isArtist ? (result as QobuzArtist).albums_count + ' Releases' : album!.genre.name}
                                 </p>
-                                {!(getType(result) === 'artists') && (
-                                    <p className='text-xs truncate font-mono text-muted-foreground'>{new Date(album.released_at * 1000).getFullYear()}</p>
+                                {!item.isArtist && (
+                                    <p className='text-xs truncate font-mono text-muted-foreground'>{item.releasedYear}</p>
                                 )}
-                                {!(getType(result) === 'artists') && (
+                                {!item.isArtist && (
                                     <div className='flex text-[10px] truncate font-semibold items-center justify-start'>
-                                        <p>{(result as QobuzAlbum | QobuzTrack).maximum_bit_depth}-bit</p>
+                                        <p>{item.bitDepth}-bit</p>
                                         <DotIcon size={16} />
-                                        <p>{(result as QobuzAlbum | QobuzTrack).maximum_sampling_rate} kHz</p>
+                                        <p>{item.samplingRate} kHz</p>
                                     </div>
                                 )}
                                 <div className='flex text-[10px] truncate font-semibold items-center justify-start'>
-                                    {(result as QobuzAlbum).tracks_count ? (
+                                    {item.tracksCount ? (
                                         <>
                                             <p>
-                                                {(result as QobuzAlbum).tracks_count} {(result as QobuzAlbum).tracks_count > 1 ? 'tracks' : 'track'}
+                                                {item.tracksCount} {item.tracksCount > 1 ? 'tracks' : 'track'}
                                             </p>
                                             <DotIcon size={16} />
                                         </>
                                     ) : null}
-                                    {!(getType(result) === 'artists') && <p>{formatDuration((result as QobuzAlbum | QobuzTrack).duration)}</p>}
+                                    {!item.isArtist && <p>{formatDuration(item.duration ?? 0)}</p>}
                                 </div>
                             </div>
-                            {getType(result) !== 'artists' && showArtistDialog && (
+                            {!item.isArtist && showArtistDialog && (
                                 <div className='absolute top-0 right-0 p-4'>
                                     <Button
                                         size='icon'
@@ -123,21 +123,22 @@ const ReleaseCard = ({
                                 </div>
                             )}
                         </div>
-                        {!(getType(result) === 'artists') && (
+                        {!item.isArtist && (
                             <div className='flex items-center justify-between gap-4 p-2'>
-                                {(result as QobuzTrack).album ? (
+                                {item.isTrack ? (
                                     <Button
                                         size='icon'
                                         variant='ghost'
                                         onClick={async () => {
-                                            await createDownloadJob(
-                                                result as QobuzTrack,
+                                            await download(
+                                                {
+                                                    target: result as QobuzTrack,
+                                                    settings,
+                                                    country,
+                                                    albumCache: albumCacheOf(fetchedAlbumData, setFetchedAlbumData)
+                                                },
                                                 setStatusBar,
-                                                ffmpegState,
-                                                settings,
-                                                fetchedAlbumData,
-                                                setFetchedAlbumData,
-                                                country
+                                                ffmpegState
                                             );
                                         }}
                                     >
@@ -157,7 +158,7 @@ const ReleaseCard = ({
                                         onClose={() => setFocusCard(false)}
                                     />
                                 )}
-                                {(result as QobuzTrack).album ? null : (
+                                {item.isTrack ? null : (
                                     <Button
                                         size='icon'
                                         variant='ghost'
@@ -174,17 +175,17 @@ const ReleaseCard = ({
                     </div>
                 </div>
                 <motion.div
-                    initial={(album || result).image?.small ? { scale: 0.9 } : { scale: 1 }}
+                    initial={item.image?.small ? { scale: 0.9 } : { scale: 1 }}
                     animate={imageAnimationControls}
                     transition={{ duration: 0.1 }}
                     className={cn('absolute left-0 top-0 z-[2] w-full aspect-square transition-all')}
                 >
-                    {(album || result).image?.small ? (
+                    {item.image?.small ? (
                         <>
-                            {getType(result) === 'artists' ? (
+                            {item.isArtist ? (
                                 <Image
                                     fill
-                                    src={(album || result).image?.small}
+                                    src={item.image?.small ?? ''}
                                     alt={formatTitle(result)}
                                     className={cn(
                                         'object-cover group-hover:scale-105 transition-all w-full h-full text-[0px]',
@@ -199,7 +200,7 @@ const ReleaseCard = ({
                             ) : (
                                 <img
                                     crossOrigin='anonymous'
-                                    src={(album || result).image?.small}
+                                    src={item.image?.small ?? ''}
                                     alt={formatTitle(result)}
                                     className={cn(
                                         'object-cover group-hover:scale-105 transition-all w-full h-full text-[0px]',
@@ -216,7 +217,7 @@ const ReleaseCard = ({
                     ) : (
                         <motion.div className='flex items-center justify-center bg-secondary w-full h-full' initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                             {filterData.map((filter, index) => {
-                                if (filter.value === getType(result)) {
+                                if (filter.value === item.kind) {
                                     return <filter.icon key={index} className='w-1/2 h-1/2 opacity-20' />;
                                 }
                             })}
@@ -237,28 +238,28 @@ const ReleaseCard = ({
                     )}
                     <h1 className='text-[13px] leading-snug truncate font-medium text-foreground group-hover:text-primary transition-colors'>{formatTitle(result)}</h1>
                 </div>
-                {!(getType(result) === 'artists') && (
-                    <div className='text-[11px] truncate flex gap-x-1.5 items-center text-muted-foreground' title={formatArtists(result as QobuzAlbum | QobuzTrack)}>
+                {!item.isArtist && (
+                    <div className='text-[11px] truncate flex gap-x-1.5 items-center text-muted-foreground' title={item.artists}>
                         <span className='index-numeral shrink-0'>{typeof index === 'number' ? String(index + 1).padStart(2, '0') : '—'}</span>
-                        <span className='truncate'>{formatArtists(result as QobuzAlbum | QobuzTrack)}</span>
+                        <span className='truncate'>{item.artists}</span>
                     </div>
                 )}
-                {(result as QobuzTrack).album?.title ? (
+                {item.isTrack && album?.title ? (
                     <div className='text-xs truncate flex gap-x-0.5 items-center'>
                         <DiscAlbumIcon className='size-3.5 shrink-0' />
-                        <span className='truncate'>{(result as QobuzTrack).album.title}</span>
+                        <span className='truncate'>{album.title}</span>
                     </div>
                 ) : null}
             </div>
-            {getType(result) === 'artists' && <ArtistDialog open={openArtistDialog} setOpen={setOpenArtistDialog} artist={result as QobuzArtist} />}
+            {item.isArtist && <ArtistDialog open={openArtistDialog} setOpen={setOpenArtistDialog} artist={result as QobuzArtist} />}
             <Dialog open={openTracklist} onOpenChange={setOpenTracklist}>
                 <DialogContent className='w-[600px] max-w-[90%] md:max-w-[80%] overflow-hidden'>
                     <div className='flex gap-3 overflow-hidden'>
                         <div className='relative shrink-0 aspect-square min-w-[100px] min-h-[100px] rounded-none overflow-hidden border border-border'>
                             <Skeleton className='absolute aspect-square w-full h-full' />
-                            {(album || result).image?.small && (
+                            {item.image?.small && (
                                 <img
-                                    src={(album || result).image?.small}
+                                    src={item.image?.small ?? ''}
                                     alt={formatTitle(result)}
                                     crossOrigin='anonymous'
                                     className='absolute aspect-square w-full h-full'
@@ -271,17 +272,17 @@ const ReleaseCard = ({
                                 <DialogTitle title={formatTitle(album || result)} className='truncate overflow-visible py-0.5 pr-2'>
                                     {formatTitle(album || result)}
                                 </DialogTitle>
-                                {!(getType(result) === 'artists') && (
-                                    <DialogDescription title={formatArtists(result as QobuzAlbum | QobuzTrack)} className='truncate overflow-visible '>
-                                        {formatArtists(result as QobuzAlbum | QobuzTrack)}
+                                {!item.isArtist && (
+                                    <DialogDescription title={item.artists} className='truncate overflow-visible '>
+                                        {item.artists}
                                     </DialogDescription>
                                 )}
                             </div>
                             <div className='flex items-center w-full justify-between gap-2'>
                                 <div className='space-y-1.5 w-fit'>
-                                    {!(getType(result) === 'artists') && (
+                                    {!item.isArtist && (
                                         <DialogDescription className='truncate'>
-                                            {album.tracks_count} {album.tracks_count > 1 ? 'tracks' : 'track'} - {formatDuration(album.duration)}
+                                            {item.tracksCount} {item.tracksCount && item.tracksCount > 1 ? 'tracks' : 'track'} - {formatDuration(album?.duration)}
                                         </DialogDescription>
                                     )}
                                 </div>
@@ -307,7 +308,7 @@ const ReleaseCard = ({
                             <motion.div initial={{ maxHeight: '0vh' }} animate={{ maxHeight: '40vh' }}>
                                 <div className='flex flex-col overflow-hidden pr-3'>
                                     {fetchedAlbumData.tracks.items.map((track: QobuzTrack, index: number) => {
-                                        track.album = album;
+                                        track.album = album!;
                                         return (
                                             <div key={track.id}>
                                                 <div
@@ -335,14 +336,10 @@ const ReleaseCard = ({
                                                             size='icon'
                                                             variant='ghost'
                                                             onClick={async () => {
-                                                                await createDownloadJob(
-                                                                    track,
+                                                                await download(
+                                                                    { target: track, settings, country },
                                                                     setStatusBar,
-                                                                    ffmpegState,
-                                                                    settings,
-                                                                    undefined,
-                                                                    undefined,
-                                                                    country
+                                                                    ffmpegState
                                                                 );
                                                                 toast.info(`Added '${formatTitle(track)}' to the queue`);
                                                             }}
@@ -362,7 +359,9 @@ const ReleaseCard = ({
                     )}
                 </DialogContent>
             </Dialog>
-            {getType(result) !== 'artists' && showArtistDialog && <ArtistDialog open={openArtistDialog} setOpen={setOpenArtistDialog} artist={artist} />}
+            {!item.isArtist && showArtistDialog && artist && (
+                <ArtistDialog open={openArtistDialog} setOpen={setOpenArtistDialog} artist={artist} />
+            )}
         </div>
     );
 };

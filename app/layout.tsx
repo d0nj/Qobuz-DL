@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import ChangelogDialog from '@/components/ui/changelog-dialog';
 import SettingsForm from '@/components/ui/settings-form';
 import { Toaster } from '@/components/ui/sonner';
+import { APPLICATION_NAME, IS_DEFAULT_APPLICATION_NAME } from '@/lib/app-config';
 import { CountryProvider } from '@/lib/country-provider';
 import { FFmpegProvider } from '@/lib/ffmpeg-provider';
 import { SettingsProvider } from '@/lib/settings-provider';
@@ -45,18 +46,18 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
     metadataBase: new URL('https://www.qobuz-dl.com/'), // Site URL
     title: {
-        default: process.env.NEXT_PUBLIC_APPLICATION_NAME + ' - A frontend browser client for downloading music for Qobuz.',
-        template: process.env.NEXT_PUBLIC_APPLICATION_NAME!
+        default: `${APPLICATION_NAME} - A frontend browser client for downloading music for Qobuz.`,
+        template: APPLICATION_NAME
     },
     description: 'A frontend browser client for downloading music for Qobuz.',
     openGraph: {
         images:
-            process.env.NEXT_PUBLIC_APPLICATION_NAME!.toLowerCase() === 'qobuz-dl'
+            IS_DEFAULT_APPLICATION_NAME
                 ? [{ url: '/logo/qobuz-banner.png', width: 650, height: 195, alt: 'Qobuz Logo' }]
                 : []
     },
     keywords: [
-        `${process.env.NEXT_PUBLIC_APPLICATION_NAME!}`,
+        APPLICATION_NAME,
         'music',
         'downloader',
         'hi-res',

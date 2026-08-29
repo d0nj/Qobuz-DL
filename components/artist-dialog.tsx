@@ -1,13 +1,13 @@
-import axios from 'axios';
 import Image from 'next/image';
 import React, { useEffect, useState } from 'react';
 import ReleaseCard from './release-card';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
-import { Disc3Icon, DiscAlbumIcon, DownloadIcon, LucideIcon, RadioTowerIcon, UsersIcon } from 'lucide-react';
+import { DownloadIcon, UsersIcon } from 'lucide-react';
 import { downloadArtistDiscography } from '@/lib/download-job';
 import { motion } from 'motion/react';
-import { parseArtistAlbumData, parseArtistData, QobuzArtist, QobuzArtistResults } from '@/lib/qobuz-dl';
+import { artistReleaseCategories, parseArtistAlbumData, parseArtistData, QobuzArtist, QobuzArtistResults, ReleaseCategory } from '@/lib/qobuz-dl';
+import { getApiClient } from '@/lib/api/client';
 import { ScrollArea, ScrollBar } from './ui/scroll-area';
 import { Skeleton } from './ui/skeleton';
 import { useFFmpeg } from '@/lib/ffmpeg-provider';
@@ -18,34 +18,7 @@ import { useTheme } from 'next-themes';
 import { useCountry } from '@/lib/country-provider';
 import { toast } from 'sonner';
 
-export type CategoryType = {
-    label: string;
-    value: 'album' | 'epSingle' | 'live' | 'compilation';
-    icon: LucideIcon;
-};
 
-export const artistReleaseCategories: CategoryType[] = [
-    {
-        label: 'albums',
-        value: 'album',
-        icon: DiscAlbumIcon
-    },
-    {
-        label: 'EPs & singles',
-        value: 'epSingle',
-        icon: Disc3Icon
-    },
-    {
-        label: 'live albums',
-        value: 'live',
-        icon: RadioTowerIcon
-    },
-    {
-        label: 'compilations',
-        value: 'compilation',
-        icon: DiscAlbumIcon
-    }
-];
 
 const ArtistDialog = ({ open, setOpen, artist }: { open: boolean; setOpen: (open: boolean) => void; artist: QobuzArtist }) => {
     const [artistResults, setArtistResults] = useState<QobuzArtistResults | null>(null);
@@ -55,29 +28,33 @@ const ArtistDialog = ({ open, setOpen, artist }: { open: boolean; setOpen: (open
     const getArtistData = async () => {
         if (artistResults) return;
         try {
-            const response = await axios.get(`/api/get-artist`, { params: { artist_id: artist.id }, headers: { 'Token-Country': country } });
-            setArtistResults(parseArtistData(response.data.data));
+            // The route nests under `artist`, matching what `parseArtistData` reads.
+            const { artist: artistData } = await getApiClient().unwrap<QobuzArtistResults>(getApiClient().routes.artist, {
+                params: { artist_id: artist.id },
+                country
+            });
+            setArtistResults(parseArtistData({ artist: artistData } as QobuzArtistResults));
         } catch {
             toast.error('Could not fetch artist data, check your token');
         }
     };
 
-    const fetchMore = async (searchField: 'album' | 'epSingle' | 'live' | 'compilation', artistResults: QobuzArtistResults) => {
+    const fetchMore = async (
+        searchField: 'album' | 'epSingle' | 'live' | 'compilation',
+        artistResults: QobuzArtistResults
+    ): Promise<QobuzArtistResults> => {
         setSearching(true);
-        const response = await axios.get(`/api/get-releases`, {
+        const data = await getApiClient().unwrap<{ items: any[]; has_more: boolean }>(getApiClient().routes.releases, {
             params: {
                 artist_id: artist.id,
                 offset: artistResults!.artist.releases[searchField]!.items.length,
                 limit: 10,
                 release_type: searchField
             },
-            headers: { 'Token-Country': country }
+            country
         });
-        const newReleases = [
-            ...artistResults!.artist.releases[searchField].items,
-            ...response.data.data.items.map((release: any) => parseArtistAlbumData(release))
-        ];
-        setArtistResults({
+        const newReleases = [...artistResults!.artist.releases[searchField].items, ...data.items.map((release: any) => parseArtistAlbumData(release))];
+        const next: QobuzArtistResults = {
             ...artistResults!,
             artist: {
                 ...artistResults!.artist,
@@ -86,12 +63,14 @@ const ArtistDialog = ({ open, setOpen, artist }: { open: boolean; setOpen: (open
                     [searchField]: {
                         ...artistResults!.artist.releases[searchField],
                         items: newReleases,
-                        has_more: response.data.data.has_more
+                        has_more: data.has_more
                     }
                 }
             }
-        });
+        };
+        setArtistResults(next);
         setSearching(false);
+        return next;
     };
 
     useEffect(() => {
@@ -198,29 +177,29 @@ const ArtistReleaseSection = ({
     artist: QobuzArtist;
     artistResults: QobuzArtistResults | null;
     setArtistResults: React.Dispatch<React.SetStateAction<QobuzArtistResults | null>>;
-    category: CategoryType;
+    category: ReleaseCategory;
 }) => {
     const { resolvedTheme } = useTheme();
     const [searching, setSearching] = useState(false);
     const [scrollTrigger, isInView] = useInView();
     const { country } = useCountry();
 
-    const fetchMore = async (searchField: 'album' | 'epSingle' | 'live' | 'compilation', artistResults: QobuzArtistResults) => {
+    const fetchMore = async (
+        searchField: 'album' | 'epSingle' | 'live' | 'compilation',
+        artistResults: QobuzArtistResults
+    ): Promise<QobuzArtistResults> => {
         setSearching(true);
-        const response = await axios.get(`/api/get-releases`, {
+        const data = await getApiClient().unwrap<{ items: any[]; has_more: boolean }>(getApiClient().routes.releases, {
             params: {
                 artist_id: artist.id,
                 offset: artistResults!.artist.releases[searchField]!.items.length,
                 limit: 10,
                 release_type: category.value
             },
-            headers: { 'Token-Country': country }
+            country
         });
-        const newReleases = [
-            ...artistResults!.artist.releases[searchField].items,
-            ...response.data.data.items.map((release: any) => parseArtistAlbumData(release))
-        ];
-        setArtistResults({
+        const newReleases = [...artistResults!.artist.releases[searchField].items, ...data.items.map((release: any) => parseArtistAlbumData(release))];
+        const next: QobuzArtistResults = {
             ...artistResults!,
             artist: {
                 ...artistResults!.artist,
@@ -229,12 +208,14 @@ const ArtistReleaseSection = ({
                     [searchField]: {
                         ...artistResults!.artist.releases[searchField],
                         items: newReleases,
-                        has_more: response.data.data.has_more
+                        has_more: data.has_more
                     }
                 }
             }
-        });
+        };
+        setArtistResults(next);
         setSearching(false);
+        return next;
     };
 
     useEffect(() => {

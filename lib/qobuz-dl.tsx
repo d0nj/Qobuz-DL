@@ -1,5 +1,6 @@
-import axios, { AxiosRequestConfig } from 'axios';
-import { LucideIcon } from 'lucide-react';
+import { AxiosRequestConfig } from 'axios';
+import { getApiClient } from '@/lib/api/client';
+import { Disc3Icon, DiscAlbumIcon, LucideIcon, RadioTowerIcon } from 'lucide-react';
 
 export type APIOptionProps = Partial<
     AxiosRequestConfig & {
@@ -171,26 +172,125 @@ export type FilterDataType = {
 
 export type QobuzSearchFilters = 'albums' | 'tracks' | 'artists';
 
+export type ReleaseCategoryValue = 'album' | 'epSingle' | 'live' | 'compilation';
+
+export type ReleaseCategory = {
+    label: string;
+    value: ReleaseCategoryValue;
+    icon: LucideIcon;
+};
+
+export const artistReleaseCategories: ReleaseCategory[] = [
+    { label: 'albums', value: 'album', icon: DiscAlbumIcon },
+    { label: 'EPs & singles', value: 'epSingle', icon: Disc3Icon },
+    { label: 'live albums', value: 'live', icon: RadioTowerIcon },
+    { label: 'compilations', value: 'compilation', icon: DiscAlbumIcon }
+];
+
 export const QOBUZ_ALBUM_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/album\/[a-zA-Z0-9]+/;
 export const QOBUZ_TRACK_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/track\/\d+/;
 export const QOBUZ_ARTIST_URL_REGEX = /https:\/\/(play|open)\.qobuz\.com\/artist\/\d+/;
 
+export type CatalogueKind = 'albums' | 'tracks' | 'artists' | 'unknown';
+
+/**
+ * Discriminates a Qobuz result.
+ *
+ * The Qobuz API returns three shapes with no tag, so the shape has to be
+ * inferred. The previous `getType` fell through to `'albums'` by elimination,
+ * which meant an unrecognised object silently rendered as an album. `'unknown'`
+ * makes that case visible instead; renderers treat it as "not an artist".
+ */
+export function getType(input: QobuzAlbum | QobuzTrack | QobuzArtist): CatalogueKind {
+    if (!input || typeof input !== 'object') return 'unknown';
+    if ('albums_count' in input) return 'artists';
+    if ('album' in input) return 'tracks';
+    if ('image' in input || 'tracks_count' in input) return 'albums';
+    return 'unknown';
+}
+
+export function isArtist(input: QobuzAlbum | QobuzTrack | QobuzArtist): input is QobuzArtist {
+    return getType(input) === 'artists';
+}
+
+export function isTrack(input: QobuzAlbum | QobuzTrack | QobuzArtist): input is QobuzTrack {
+    return getType(input) === 'tracks';
+}
+
+/**
+ * Everything a card needs, resolved once.
+ *
+ * Release cards re-ran `getType` fifteen times per render and cast the union
+ * twenty-plus times. Resolving once moves the shape knowledge into this module
+ * and leaves the renderer with plain values.
+ */
+export type CatalogueItemView = {
+    kind: CatalogueKind;
+    isArtist: boolean;
+    isTrack: boolean;
+    album: QobuzAlbum | undefined;
+    artist: QobuzArtist | undefined;
+    title: string;
+    artists: string;
+    duration: number | undefined;
+    bitDepth: number | undefined;
+    samplingRate: number | undefined;
+    tracksCount: number | undefined;
+    releasedYear: number | undefined;
+    image: QobuzAlbum['image'] | QobuzArtist['image'] | undefined;
+};
+
+export function describeCatalogueItem(input: QobuzAlbum | QobuzTrack | QobuzArtist): CatalogueItemView {
+    const kind = getType(input);
+    const artistKind = kind === 'artists';
+    const trackKind = kind === 'tracks';
+    const album = artistKind ? undefined : getAlbum(input);
+    const record = (input ?? {}) as QobuzAlbum | QobuzTrack;
+    const releasedAt = record.released_at;
+
+    return {
+        kind,
+        isArtist: artistKind,
+        isTrack: trackKind,
+        album,
+        artist: artistKind
+            ? (input as QobuzArtist)
+            : ((input as QobuzAlbum)?.artist ?? (input as QobuzTrack)?.performer ?? (input as QobuzTrack)?.composer),
+        title: formatTitle(input),
+        artists: artistKind ? '' : formatArtists(record),
+        duration: record.duration,
+        bitDepth: record.maximum_bit_depth,
+        samplingRate: record.maximum_sampling_rate,
+        tracksCount: (record as QobuzAlbum).tracks_count,
+        releasedYear: releasedAt ? new Date(releasedAt * 1000).getFullYear() : undefined,
+        image: (input as QobuzAlbum | QobuzArtist)?.image
+    };
+}
+
 export function getAlbum(input: QobuzAlbum | QobuzTrack | QobuzArtist) {
-    return ((input as QobuzAlbum).image ? input : (input as QobuzTrack).album) as QobuzAlbum;
+    if (!input || typeof input !== 'object') return undefined as unknown as QobuzAlbum;
+    const album = (input as QobuzAlbum).image ? input : (input as QobuzTrack).album;
+    return album as QobuzAlbum | undefined;
 }
 
 export function formatTitle(input: QobuzAlbum | QobuzTrack | QobuzArtist) {
-    return `${(input as QobuzAlbum | QobuzTrack).title ?? (input as QobuzArtist).name}${(input as QobuzAlbum | QobuzTrack).version ? ' (' + (input as QobuzAlbum | QobuzTrack).version + ')' : ''}`.trim();
+    if (!input || typeof input !== 'object') return '';
+    const record = input as QobuzAlbum | QobuzTrack;
+    const name = record.title ?? (input as QobuzArtist).name ?? '';
+    return `${name}${record.version ? ' (' + record.version + ')' : ''}`.trim();
 }
 
 export function getFullResImageUrl(input: QobuzAlbum | QobuzTrack) {
-    return getAlbum(input).image.large.substring(0, getAlbum(input).image.large.length - 7) + 'org.jpg';
+    const large = getAlbum(input)?.image?.large;
+    if (!large) return '';
+    return large.substring(0, large.length - 7) + 'org.jpg';
 }
 
 export function formatArtists(input: QobuzAlbum | QobuzTrack, separator: string = ', ') {
-    return (getAlbum(input) as QobuzAlbum).artists && (getAlbum(input) as QobuzAlbum).artists.length > 0
-        ? (getAlbum(input) as QobuzAlbum).artists.map((artist) => artist.name).join(separator)
-        : (input as QobuzTrack).performer?.name || 'Various Artists';
+    const artists = getAlbum(input)?.artists;
+    return artists && artists.length > 0
+        ? artists.map((artist) => artist.name).join(separator)
+        : (input as QobuzTrack)?.performer?.name || 'Various Artists';
 }
 
 export function filterExplicit(results: QobuzSearchResults, explicit: boolean = true) {
@@ -207,8 +307,8 @@ export function filterExplicit(results: QobuzSearchResults, explicit: boolean = 
     };
 }
 
-export function formatDuration(seconds: number) {
-    if (!seconds) return '0m';
+export function formatDuration(seconds: number | undefined) {
+    if (!seconds || Number.isNaN(seconds)) return '0m';
     const totalMinutes = Math.floor(seconds / 60);
     const hours = Math.floor(totalMinutes / 60);
     const remainingMinutes = totalMinutes % 60;
@@ -217,19 +317,28 @@ export function formatDuration(seconds: number) {
     return `${hours > 0 ? hours + 'h ' : ''} ${remainingMinutes > 0 ? remainingMinutes + 'm ' : ''} ${remainingSeconds > 0 && hours <= 0 ? remainingSeconds + 's' : ''}`.trim();
 }
 
-export function getType(input: QobuzAlbum | QobuzTrack | QobuzArtist): QobuzSearchFilters {
-    if ('albums_count' in input) return 'artists';
-    if ('album' in input) return 'tracks';
-    return 'albums';
-}
+/**
+ * Normalises an artist-release payload into a QobuzAlbum.
+ *
+ * Returns a new object. The previous version mutated its argument in place,
+ * which meant calling it twice on the same album re-derived fields from the
+ * already-overwritten ones.
+ */
+export function parseArtistAlbumData(album: QobuzAlbum): QobuzAlbum {
+    const raw = album as unknown as {
+        audio_info?: { maximum_sampling_rate?: number; maximum_bit_depth?: number };
+        rights?: { streamable?: boolean };
+        dates?: { stream?: string | number; original?: string };
+    };
 
-export function parseArtistAlbumData(album: QobuzAlbum) {
-    album.maximum_sampling_rate = (album as any).audio_info.maximum_sampling_rate;
-    album.maximum_bit_depth = (album as any).audio_info.maximum_bit_depth;
-    album.streamable = (album as any).rights.streamable;
-    album.released_at = new Date((album as any).dates.stream).getTime() / 1000;
-    album.release_date_original = (album as any).dates.original;
-    return album;
+    return {
+        ...album,
+        maximum_sampling_rate: raw.audio_info?.maximum_sampling_rate ?? album.maximum_sampling_rate,
+        maximum_bit_depth: raw.audio_info?.maximum_bit_depth ?? album.maximum_bit_depth,
+        streamable: raw.rights?.streamable ?? album.streamable,
+        released_at: raw.dates?.stream ? new Date(raw.dates.stream).getTime() / 1000 : album.released_at,
+        release_date_original: raw.dates?.original ?? album.release_date_original
+    };
 }
 
 export function parseArtistData(artistData: QobuzArtistResults) {
@@ -260,7 +369,10 @@ export async function getFullAlbumInfo(
 ) {
     if (fetchedAlbumData && (fetchedAlbumData as FetchedQobuzAlbum).id === (result as QobuzAlbum).id) return fetchedAlbumData;
     setFetchedAlbumData(null);
-    const albumDataResponse = await axios.get('/api/get-album', { params: { album_id: (result as QobuzAlbum).id }, headers: { 'Token-Country': country } });
-    setFetchedAlbumData(albumDataResponse.data.data);
-    return albumDataResponse.data.data;
+    const albumData = await getApiClient().unwrap<FetchedQobuzAlbum>(getApiClient().routes.album, {
+        params: { album_id: (result as QobuzAlbum).id },
+        country
+    });
+    setFetchedAlbumData(albumData);
+    return albumData;
 }

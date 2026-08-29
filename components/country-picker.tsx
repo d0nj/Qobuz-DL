@@ -3,7 +3,7 @@ import { Select, SelectContent, SelectItem } from './ui/select';
 import { SelectTrigger } from '@radix-ui/react-select';
 import { ReactCountryFlag } from 'react-country-flag';
 import { useCountry } from '@/lib/country-provider';
-import axios from 'axios';
+import { getApiClient } from '@/lib/api/client';
 import { ChevronDownIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,15 +15,21 @@ const CountryPicker = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
     const displayNames = new Intl.DisplayNames(['en'], { type: 'region' });
 
     useEffect(() => {
+        let cancelled = false;
         (async () => {
-            const response = await axios.get('/api/get-countries');
-            if (!response.data.success) return;
-            if (response.data.data.length === 0) return;
+            const response = await getApiClient().get<string[]>(getApiClient().routes.countries);
+            if (cancelled) return;
+            // An empty list means country selection isn't configured, so the picker
+            // stays hidden rather than rendering an empty dropdown.
+            if (!response.success || response.data.length === 0) return;
             setEnabled(true);
-            setCountriesList(response.data.data);
+            setCountriesList(response.data);
             const savedCountry = localStorage.getItem('country');
-            if (!savedCountry || !response.data.data.includes(savedCountry)) setCountry(response.data.data[0]);
+            if (!savedCountry || !response.data.includes(savedCountry)) setCountry(response.data[0]);
         })();
+        return () => {
+            cancelled = true;
+        };
     }, []);
     return (
         <>

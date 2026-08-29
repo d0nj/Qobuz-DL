@@ -5,7 +5,8 @@ import { StatusBarProps } from './status-bar/status-bar';
 import { FFmpegType } from '@/lib/ffmpeg-functions';
 import { SettingsProps } from '@/lib/settings-provider';
 import { FetchedQobuzAlbum, formatTitle, getFullAlbumInfo, QobuzAlbum } from '@/lib/qobuz-dl';
-import { createDownloadJob } from '@/lib/download-job';
+import { download } from '@/lib/download-job';
+import { albumCacheOf } from '@/lib/download/request';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { useCountry } from '@/lib/country-provider';
 import { toast } from 'sonner';
@@ -13,7 +14,7 @@ import { toast } from 'sonner';
 export interface DownloadAlbumButtonProps extends ButtonProps {
     result: QobuzAlbum;
     setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>;
-    ffmpegState: FFmpegType;
+    ffmpegState: FFmpegType | null;
     settings: SettingsProps;
     fetchedAlbumData: FetchedQobuzAlbum | null;
     setFetchedAlbumData: React.Dispatch<React.SetStateAction<FetchedQobuzAlbum | null>>;
@@ -57,7 +58,16 @@ const DownloadButton = React.forwardRef<HTMLButtonElement, DownloadAlbumButtonPr
                     <DropdownMenuContent>
                         <DropdownMenuItem
                             onClick={() => {
-                                createDownloadJob(result, setStatusBar, ffmpegState, settings, fetchedAlbumData, setFetchedAlbumData, country);
+                                download(
+                                    {
+                                        target: result,
+                                        settings,
+                                        country,
+                                        albumCache: albumCacheOf(fetchedAlbumData, setFetchedAlbumData)
+                                    },
+                                    setStatusBar,
+                                    ffmpegState
+                                );
                                 toast.info(`Added '${formatTitle(result)}'`);
                             }}
                             className='flex items-center gap-2'
@@ -70,14 +80,15 @@ const DownloadButton = React.forwardRef<HTMLButtonElement, DownloadAlbumButtonPr
                                 const albumData = await getFullAlbumInfo(fetchedAlbumData, setFetchedAlbumData, result, country);
                                 for (const track of albumData.tracks.items) {
                                     if (track.streamable) {
-                                        await createDownloadJob(
-                                            { ...track, album: albumData },
+                                        await download(
+                                            {
+                                                target: { ...track, album: albumData },
+                                                settings,
+                                                country,
+                                                albumCache: albumCacheOf(albumData, setFetchedAlbumData)
+                                            },
                                             setStatusBar,
-                                            ffmpegState,
-                                            settings,
-                                            albumData,
-                                            setFetchedAlbumData,
-                                            country
+                                            ffmpegState
                                         );
                                         await new Promise((resolve) => setTimeout(resolve, 100));
                                     }
