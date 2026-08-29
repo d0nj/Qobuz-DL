@@ -24,6 +24,11 @@ export type StatusBarProps = {
     processing: boolean;
     queue?: QueueProps[];
     onCancel?: () => void;
+    /**
+     * Set once a job finishes, before the queue drains and the bar retreats.
+     * Without it the last frame a user sees is a bar vanishing mid-fill.
+     */
+    complete?: boolean;
 };
 
 export const initialStatusBar: StatusBarProps = {
@@ -33,5 +38,6 @@ export const initialStatusBar: StatusBarProps = {
     progress: 0,
     description: '',
     processing: false,
-    onCancel: () => {}
+    onCancel: () => {},
+    complete: false
 };

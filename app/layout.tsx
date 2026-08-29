@@ -1,3 +1,4 @@
+import MotionProvider from '@/components/motion-provider';
 import StatusBarContainer from '@/components/status-bar/container';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Button } from '@/components/ui/button';
@@ -51,66 +52,49 @@ export const metadata: Metadata = {
     },
     description: 'A frontend browser client for downloading music for Qobuz.',
     openGraph: {
-        images:
-            IS_DEFAULT_APPLICATION_NAME
-                ? [{ url: '/logo/qobuz-banner.png', width: 650, height: 195, alt: 'Qobuz Logo' }]
-                : []
+        images: IS_DEFAULT_APPLICATION_NAME ? [{ url: '/logo/qobuz-banner.png', width: 650, height: 195, alt: 'Qobuz Logo' }] : []
     },
-    keywords: [
-        APPLICATION_NAME,
-        'music',
-        'downloader',
-        'hi-res',
-        'qobuz',
-        'flac',
-        'alac',
-        'mp3',
-        'aac',
-        'opus',
-        'wav',
-        'qobuz download'
-    ]
+    keywords: [APPLICATION_NAME, 'music', 'downloader', 'hi-res', 'qobuz', 'flac', 'alac', 'mp3', 'aac', 'opus', 'wav', 'qobuz download']
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
     return (
         <html lang='en' className='dark' suppressHydrationWarning>
-            <body
-                className={`${geist.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} antialiased`}
-                suppressHydrationWarning
-            >
+            <body className={`${geist.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
                 <FFmpegProvider>
-                    <CountryProvider>
-                        <StatusBarProvider>
-                            <SettingsProvider>
-                                <ThemeProvider attribute='class' defaultTheme='dark' enableSystem>
-                                    <div className='grain-field' aria-hidden='true' />
-                                    <div className='fixed justify-between items-start flex w-full max-w-screen p-4 z-[10]'>
-                                        <div className='flex flex-col gap-2'>
-                                            <SettingsForm />
-                                            <ChangelogDialog />
+                    <MotionProvider>
+                        <CountryProvider>
+                            <StatusBarProvider>
+                                <SettingsProvider>
+                                    <ThemeProvider attribute='class' defaultTheme='dark' enableSystem>
+                                        <div className='grain-field' aria-hidden='true' />
+                                        <div className='fixed justify-between items-start flex w-full max-w-screen p-4 z-[10]'>
+                                            <div className='flex flex-col gap-2'>
+                                                <SettingsForm />
+                                                <ChangelogDialog />
+                                            </div>
+                                            <div className='flex gap-2 items-center'>
+                                                <a href='https://github.com/d0nj/Qobuz-DL' target='_blank' rel='noopener noreferrer'>
+                                                    <Button variant='ghost' size='icon'>
+                                                        <FaGithub />
+                                                    </Button>
+                                                </a>
+                                            </div>
                                         </div>
-                                        <div className='flex gap-2 items-center'>
-                                            <a href='https://github.com/d0nj/Qobuz-DL' target='_blank' rel='noopener noreferrer'>
-                                                <Button variant='ghost' size='icon'>
-                                                    <FaGithub />
-                                                </Button>
-                                            </a>
+                                        <div className='flex flex-col min-h-screen'>
+                                            <main className='px-6 pb-12 pt-28 md:pt-24 2xl:pt-40 min-h-full flex-1 flex flex-col items-center justify-center gap-2 z-[2] overflow-x-hidden max-w-screen overflow-y-hidden'>
+                                                {children}
+                                            </main>
+                                            <Toaster closeButton richColors />
+                                            <StatusBarContainer />
                                         </div>
-                                    </div>
-                                    <div className='flex flex-col min-h-screen'>
-                                        <main className='px-6 pb-12 pt-28 md:pt-24 2xl:pt-40 min-h-full flex-1 flex flex-col items-center justify-center gap-2 z-[2] overflow-x-hidden max-w-screen overflow-y-hidden'>
-                                            {children}
-                                        </main>
-                                        <Toaster closeButton richColors />
-                                        <StatusBarContainer />
-                                    </div>
-                                </ThemeProvider>
-                            </SettingsProvider>
-                        </StatusBarProvider>
+                                    </ThemeProvider>
+                                </SettingsProvider>
+                            </StatusBarProvider>
+                        </CountryProvider>
                         <Script src='https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.9.7/dist/ffmpeg.min.js' strategy='beforeInteractive' />
                         <Script src='https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js' strategy='beforeInteractive' />
-                    </CountryProvider>
+                    </MotionProvider>
                 </FFmpegProvider>
             </body>
         </html>

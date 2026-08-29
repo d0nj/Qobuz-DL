@@ -104,7 +104,7 @@ async function runTrackDownload(
                 },
                 signal
             });
-            setStatusBar((prev) => ({ ...prev, description: `Applying metadata...`, progress: 100 }));
+            setStatusBar((prev) => ({ ...prev, description: `Applying metadata...`, progress: 100, complete: true }));
             const inputFile = response.data;
             const report = makeReporter(setStatusBar);
             let outputFile = await transcodeTrack(inputFile, {
@@ -285,7 +285,7 @@ async function runAlbumDownload(
             if (albumArt === false) delete zipFiles['cover.jpg'];
             const zippedFile = zipSync(zipFiles, { level: 0 });
             const zipBlob = new Blob([zippedFile as BlobPart], { type: 'application/zip' });
-            setStatusBar((prev) => ({ ...prev, progress: 100 }));
+            setStatusBar((prev) => ({ ...prev, progress: 100, complete: true }));
             const objectURL = URL.createObjectURL(zipBlob);
             saveAs(objectURL, formatCustomTitle(settings.zipName, result) + '.zip');
             setTimeout(() => {
