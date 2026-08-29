@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import saveAs from 'file-saver';
-import { applyMetadata, codecMap, FFmpegType, fixMD5Hash, loadFFmpeg } from './ffmpeg-functions';
+import { FFmpegType, fixMD5Hash, loadFFmpeg, ProgressReporter, transcodeTrack } from './ffmpeg-functions';
+import { codecMap, needsEncoder } from './transcode';
 import { artistReleaseCategories } from '@/components/artist-dialog';
 import { cleanFileName, formatBytes, formatCustomTitle, resizeImage } from './utils';
 import { createJob } from './status-bar/jobs';
@@ -12,10 +13,20 @@ import { StatusBarProps } from '@/components/status-bar/status-bar';
 import { zipSync } from 'fflate';
 import { toast } from 'sonner';
 
+/** Adapts the status-bar setter to the reporter the transcode module expects. */
+function makeReporter(setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>): ProgressReporter {
+    return (description, progress) =>
+        setStatusBar((prev) => ({
+            ...prev,
+            description,
+            ...(progress === undefined ? {} : { progress })
+        }));
+}
+
 export const createDownloadJob = async (
     result: QobuzAlbum | QobuzTrack,
     setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>,
-    ffmpegState: FFmpegType,
+    ffmpegState: FFmpegType | null,
     settings: SettingsProps,
     fetchedAlbumData?: FetchedQobuzAlbum | null,
     setFetchedAlbumData?: React.Dispatch<React.SetStateAction<FetchedQobuzAlbum | null>>,
@@ -39,11 +50,7 @@ export const createDownloadJob = async (
                             controller.abort();
                         }
                     }));
-                    if (
-                        settings.applyMetadata ||
-                        !((settings.outputQuality === '27' && settings.outputCodec === 'FLAC') || (settings.bitrate === 320 && settings.outputCodec === 'MP3'))
-                    )
-                        await loadFFmpeg(ffmpegState, signal);
+                    if (needsEncoder(settings)) await loadFFmpeg(ffmpegState, signal);
                     setStatusBar((prev) => ({ ...prev, description: 'Fetching track size...' }));
                     const { url: trackURL } = await getApiClient().unwrap<{ url: string }>(getApiClient().routes.download, {
                         params: { track_id: (result as QobuzTrack).id, quality: settings.outputQuality },
@@ -69,8 +76,14 @@ export const createDownloadJob = async (
                     });
                     setStatusBar((prev) => ({ ...prev, description: `Applying metadata...`, progress: 100 }));
                     const inputFile = response.data;
-                    let outputFile = await applyMetadata(inputFile, result as QobuzTrack, ffmpegState, settings, setStatusBar);
-                    if (settings.outputCodec === 'FLAC' && settings.fixMD5) outputFile = await fixMD5Hash(outputFile, setStatusBar);
+                    const report = makeReporter(setStatusBar);
+                    let outputFile = await transcodeTrack(inputFile, {
+                        ffmpeg: ffmpegState,
+                        settings,
+                        track: result as QobuzTrack,
+                        report
+                    });
+                    if (settings.outputCodec === 'FLAC' && settings.fixMD5) outputFile = new Uint8Array(await fixMD5Hash(outputFile, report));
                     const objectURL = URL.createObjectURL(new Blob([outputFile]));
                     const title = formattedTitle + '.' + codecMap[settings.outputCodec].extension;
                     const audioElement = document.createElement('audio');
@@ -132,11 +145,7 @@ export const createDownloadJob = async (
                             controller.abort();
                         }
                     }));
-                    if (
-                        settings.applyMetadata ||
-                        !((settings.outputQuality === '27' && settings.outputCodec === 'FLAC') || (settings.bitrate === 320 && settings.outputCodec === 'MP3'))
-                    )
-                        await loadFFmpeg(ffmpegState, signal);
+                    if (needsEncoder(settings)) await loadFFmpeg(ffmpegState, signal);
                     setStatusBar((prev) => ({ ...prev, description: 'Fetching album data...' }));
                     if (!fetchedAlbumData) {
                         fetchedAlbumData = await getApiClient().unwrap<FetchedQobuzAlbum>(getApiClient().routes.album, {
@@ -178,7 +187,7 @@ export const createDownloadJob = async (
                             totalAlbumSize += fileSize;
                         }
                     }
-                    const trackBuffers = [] as ArrayBuffer[];
+                    const trackBuffers = [] as Uint8Array[];
                     let totalBytesDownloaded = 0;
                     setStatusBar((statusBar) => ({ ...statusBar, progress: 0, description: `Fetching album art...` }));
                     const albumArtURL = await resizeImage(getFullResImageUrl(fetchedAlbumData!), settings.albumArtSize, settings.albumArtQuality);
@@ -204,16 +213,17 @@ export const createDownloadJob = async (
                             await new Promise((resolve) => setTimeout(resolve, 100));
                             totalBytesDownloaded += response.data.byteLength;
                             const inputFile = response.data;
-                            let outputFile = await applyMetadata(
-                                inputFile,
-                                albumTracks[index],
-                                ffmpegState,
+                            const reporter = makeReporter(setStatusBar);
+                            let outputFile = await transcodeTrack(inputFile, {
+                                ffmpeg: ffmpegState,
                                 settings,
-                                undefined,
+                                track: albumTracks[index],
                                 albumArt,
-                                fetchedAlbumData!.upc
-                            );
-                            if (settings.outputCodec === 'FLAC' && settings.fixMD5) outputFile = await (await fixMD5Hash(outputFile)).arrayBuffer();
+                                upc: fetchedAlbumData!.upc,
+                                report: reporter
+                            });
+                            if (settings.outputCodec === 'FLAC' && settings.fixMD5)
+                                outputFile = new Uint8Array(await fixMD5Hash(outputFile, reporter));
                             trackBuffers[index] = outputFile;
                         }
                     }
@@ -276,7 +286,7 @@ export async function downloadArtistDiscography(
     setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>,
     settings: SettingsProps,
     toast: (toast: any) => void,
-    ffmpegState: FFmpegType,
+    ffmpegState: FFmpegType | null,
     country?: string
 ) {
     let types: ('album' | 'epSingle' | 'live' | 'compilation')[] = [];
