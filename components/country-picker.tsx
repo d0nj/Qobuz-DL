@@ -31,8 +31,8 @@ const CountryPicker = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
                 <div className={cn('flex', className)} ref={ref} {...props}>
                     <Select value={country} onValueChange={setCountry} open={open} onOpenChange={setOpen}>
                         <SelectTrigger className='select-none outline-none'>
-                            <div className='bg-background rounded-full'>
-                                <div className='bg-primary/10 flex gap-2 px-3 py-1 rounded-full outline-primary/40 outline-[0.5px] outline items-center justify-center text-nowrap'>
+                            <div className='bg-background rounded-none'>
+                                <div className='bg-secondary flex gap-2 px-3 py-1 rounded-none outline-primary/40 outline-[0.5px] outline items-center justify-center text-nowrap'>
                                     {country ? (
                                         <>
                                             <ReactCountryFlag countryCode={country} />

@@ -91,14 +91,14 @@ const SearchBar = ({
         <div className='flex items-center gap-2 relative'>
             <div
                 onClick={() => inputRef.current?.focus()}
-                className='bg-background border relative sm:w-[600px] w-full tracking-wide font-semibold rounded-md flex gap-0.5 items-center py-1 px-3'
+                className='bg-transparent border-b border-border relative sm:w-[600px] w-full tracking-wide font-medium rounded-none flex gap-0.5 items-center py-2 px-1 transition-colors focus-within:border-primary'
             >
                 <Label htmlFor='search'>
-                    <SearchIcon className='!size-5' />
+                    <SearchIcon className='!size-4 text-muted-foreground' />
                 </Label>
                 <Input
                     id='search'
-                    className='focus-visible:outline-none focus-visible:ring-transparent select-none shadow-none outline-none border-none'
+                    className='focus-visible:outline-none focus-visible:ring-transparent select-none shadow-none outline-none border-none bg-transparent h-9 text-base md:text-lg placeholder:text-muted-foreground/70 placeholder:font-light'
                     ref={inputRef}
                     placeholder='Search for anything...'
                     value={searchInput}
@@ -128,7 +128,7 @@ const SearchBar = ({
             </div>
             <Button
                 size='icon'
-                className='w-11 h-11 shrink-0 disabled:bg-muted bg-primary disabled:text-foreground text-primary-foreground hover:text-primary-foreground hover:bg-primary/90'
+                className='w-10 h-10 shrink-0 rounded-none disabled:bg-transparent disabled:text-muted-foreground/50 bg-primary text-primary-foreground hover:text-primary-foreground hover:bg-primary transition-shadow lime-lamp-strong disabled:shadow-none'
                 variant='ghost'
                 onClick={() => {
                     if (searchInput.trim().length > 0 && !searching) {

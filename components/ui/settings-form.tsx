@@ -67,7 +67,7 @@ const SettingsForm = () => {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant='outline' className='flex gap-2 items-center'>
-                                    <p className='capitalize'>{settings.particles ? 'Particles' : 'Solid Color'}</p>
+                                    <p className='capitalize'>{settings.particles ? 'Film Grain' : 'Solid Color'}</p>
                                     <ChevronDownIcon />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -78,7 +78,7 @@ const SettingsForm = () => {
                                         setSettings((prev) => ({ ...prev, particles: value === 'particles' }));
                                     }}
                                 >
-                                    <DropdownMenuRadioItem value='particles'>Particles</DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value='particles'>Film Grain</DropdownMenuRadioItem>
                                     <DropdownMenuRadioItem value='solid color'>Solid Color</DropdownMenuRadioItem>
                                 </DropdownMenuRadioGroup>
                             </DropdownMenuContent>

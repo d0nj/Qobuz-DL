@@ -43,7 +43,7 @@ const StatusBar = () => {
                         transition={{ type: 'spring' }}
                         exit={{ y: 100, opacity: 0 }}
                     >
-                        <Card>
+                        <Card className='rounded-none border-border shadow-lg'>
                             <CardHeader className='flex items-center flex-row justify-between transition-[height] pt-4 overflow-hidden pb-2'>
                                 <Button
                                     variant='ghost'

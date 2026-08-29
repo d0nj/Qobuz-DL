@@ -34,12 +34,14 @@ const ReleaseCard = ({
     result,
     resolvedTheme,
     ref,
-    showArtistDialog
+    showArtistDialog,
+    index
 }: {
     result: QobuzAlbum | QobuzTrack | QobuzArtist;
     resolvedTheme: string;
     ref?: React.Ref<HTMLDivElement>;
     showArtistDialog?: boolean;
+    index?: number;
 }) => {
     if (typeof showArtistDialog === 'undefined') showArtistDialog = true;
     const { ffmpegState } = useFFmpeg();
@@ -66,13 +68,13 @@ const ReleaseCard = ({
 
     return (
         <div className='space-y-2' title={formatTitle(result)} ref={ref || undefined}>
-            <div className='relative w-full aspect-square group select-none rounded-sm overflow-hidden'>
+            <div className='relative w-full aspect-square group select-none rounded-none overflow-hidden bg-card border border-border/60 transition-colors group-hover:border-primary/40'>
                 <div
                     className={cn(
-                        `w-full z-[3] backdrop-blur-md top-0 left-0 absolute transition-all aspect-square opacity-0 group-hover:opacity-100 ${focusCard && 'opacity-100'}`,
+                        'w-full z-[3] top-0 left-0 absolute transition-all aspect-square opacity-0 group-hover:opacity-100 focus-within:opacity-100',
                         resolvedTheme != 'light'
-                            ? `group-hover:bg-black/40 ${focusCard && 'bg-black/40'}`
-                            : `group-hover:bg-white/20 ${focusCard && 'bg-white/20'}`
+                            ? `group-hover:bg-black/55 ${focusCard && 'bg-black/55'}`
+                            : `group-hover:bg-white/35 ${focusCard && 'bg-white/35'}`
                     )}
                     onClick={() => {
                         if (getType(result) === 'artists') setOpenArtistDialog(true);
@@ -81,11 +83,11 @@ const ReleaseCard = ({
                     <div className='flex flex-col h-full justify-between'>
                         <div className='space-y-0.5 p-4 flex justify-between relative overflow-x-hidden'>
                             <div className='w-full pr-9'>
-                                <p className='text-sm truncate capitalize font-bold'>
+                                <p className='text-[11px] truncate font-mono uppercase tracking-[0.14em] text-foreground/90'>
                                     {!(getType(result) === 'artists') ? album.genre.name : (result as QobuzArtist).albums_count + ' Releases'}
                                 </p>
                                 {!(getType(result) === 'artists') && (
-                                    <p className='text-xs truncate capitalize font-medium'>{new Date(album.released_at * 1000).getFullYear()}</p>
+                                    <p className='text-xs truncate font-mono text-muted-foreground'>{new Date(album.released_at * 1000).getFullYear()}</p>
                                 )}
                                 {!(getType(result) === 'artists') && (
                                     <div className='flex text-[10px] truncate font-semibold items-center justify-start'>
@@ -227,17 +229,17 @@ const ReleaseCard = ({
                 <div className='flex gap-1.5 items-center'>
                     {(result as QobuzAlbum | QobuzTrack).parental_warning && (
                         <p
-                            className='text-[10px] bg-primary text-primary-foreground p-1 rounded-[3px] aspect-square w-[18px] h-[18px] text-center justify-center items-center shrink-0 flex font-semibold'
+                            className='text-[9px] font-mono text-primary border border-primary/60 p-0.5 rounded-none aspect-square w-[18px] h-[18px] text-center justify-center items-center shrink-0 flex font-semibold'
                             title='Explicit'
                         >
                             E
                         </p>
                     )}
-                    <h1 className='text-sm truncate font-bold group-hover:underline'>{formatTitle(result)}</h1>
+                    <h1 className='text-[13px] leading-snug truncate font-medium text-foreground group-hover:text-primary transition-colors'>{formatTitle(result)}</h1>
                 </div>
                 {!(getType(result) === 'artists') && (
-                    <div className='text-xs truncate flex gap-x-0.5 items-center' title={formatArtists(result as QobuzAlbum | QobuzTrack)}>
-                        <UsersIcon className='size-3.5 shrink-0' />
+                    <div className='text-[11px] truncate flex gap-x-1.5 items-center text-muted-foreground' title={formatArtists(result as QobuzAlbum | QobuzTrack)}>
+                        <span className='index-numeral shrink-0'>{typeof index === 'number' ? String(index + 1).padStart(2, '0') : '—'}</span>
                         <span className='truncate'>{formatArtists(result as QobuzAlbum | QobuzTrack)}</span>
                     </div>
                 )}
@@ -252,7 +254,7 @@ const ReleaseCard = ({
             <Dialog open={openTracklist} onOpenChange={setOpenTracklist}>
                 <DialogContent className='w-[600px] max-w-[90%] md:max-w-[80%] overflow-hidden'>
                     <div className='flex gap-3 overflow-hidden'>
-                        <div className='relative shrink-0 aspect-square min-w-[100px] min-h-[100px] rounded-sm overflow-hidden'>
+                        <div className='relative shrink-0 aspect-square min-w-[100px] min-h-[100px] rounded-none overflow-hidden border border-border'>
                             <Skeleton className='absolute aspect-square w-full h-full' />
                             {(album || result).image?.small && (
                                 <img
@@ -310,15 +312,15 @@ const ReleaseCard = ({
                                             <div key={track.id}>
                                                 <div
                                                     className={cn(
-                                                        'flex items-center justify-between gap-2 overflow-hidden hover:bg-primary/5 transition-all p-2 rounded group',
+                                                        'flex items-center justify-between gap-2 overflow-hidden hover:bg-accent transition-all p-2 rounded-none group',
                                                         !track.streamable && 'opacity-50'
                                                     )}
                                                 >
                                                     <div className='gap-2 flex items-center overflow-hidden'>
-                                                        <span className='text-muted-foreground text-sm'>{index + 1}</span>
+                                                        <span className='index-numeral w-5 shrink-0'>{String(index + 1).padStart(2, '0')}</span>
                                                         {track.parental_warning && (
                                                             <p
-                                                                className='text-[10px] bg-primary text-primary-foreground p-1 rounded-[3px] aspect-square w-[18px] h-[18px] shrink-0 text-center justify-center items-center flex font-semibold'
+                                                                className='text-[9px] font-mono text-primary border border-primary/60 p-0.5 rounded-none aspect-square w-[18px] h-[18px] shrink-0 text-center justify-center items-center flex font-semibold'
                                                                 title='Explicit'
                                                             >
                                                                 E
