@@ -3,6 +3,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Cards reveal their controls on hover, but hover never fires on touch, so the
+   reveal is scoped to devices that actually have one. Everywhere else the
+   controls stay visible and tappable. */
+@custom-variant pointer-hover (@media (hover: hover) and (pointer: fine));
+
 @theme inline {
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
