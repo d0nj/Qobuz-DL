@@ -2,10 +2,12 @@
 
 ![Qobuz-DL](https://github.com/user-attachments/assets/45896382-1764-4339-824a-b31f32991480)
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FQobuzDL%2FQobuz-DL&env=QOBUZ_API_BASE,QOBUZ_APP_ID,QOBUZ_SECRET,QOBUZ_AUTH_TOKENS&envDescription=Qobuz%20API%20credentials%20%E2%80%94%20see%20below&envLink=https%3A%2F%2Fgithub.com%2FQobuzDL%2FQobuz-AppID-Secret-Tool)
+
 ---
 
 > [!IMPORTANT]
-> This repository does not contain any copyrighted material, or code to illegaly download music. Downloads are provided by the Qobuz API and should only be initiated by the API token owner. The author is **not responsible for the usage of this repository nor endorses it**, nor is the author responsible for any copies, forks, re-uploads made by other users, or anything else related to Qobuz-DL. Any live demo found online of this project is not associated with the authors of this repo. This is the author's only account and repository.
+> This repository does not contain any copyrighted material, or code to illegally download music. Downloads are provided by the Qobuz API and should only be initiated by the API token owner. The author is **not responsible for the usage of this repository nor endorses it**, nor is the author responsible for any copies, forks, re-uploads made by other users, or anything else related to Qobuz-DL. Any live demo found online of this project is not associated with the authors of this repo. This is the author's only account and repository.
 
 Qobuz-DL provides a fast and easy way to download music using Qobuz in a variety of codecs and formats entirely from the browser.
 
@@ -14,27 +16,55 @@ Qobuz-DL provides a fast and easy way to download music using Qobuz in a variety
 - Download any song or album from Qobuz.
 - Re-encode audio provided by Qobuz to a variety of different lossless and lossy codecs using FFmpeg.
 - Apply metadata to downloaded songs.
+- Search the catalogue by album, track, or artist, with country-aware availability.
+- Bulk-download an artist's discography, with ZIP or individual-file output.
+
+## Deploy to Vercel
+
+Click the button above. Vercel detects Next.js automatically — no configuration file is required.
+
+You will be asked for these environment variables during import. All four are required; the app builds and runs without them but every search and download will fail.
+
+| Variable | Example | Notes |
+| --- | --- | --- |
+| `QOBUZ_API_BASE` | `https://www.qobuz.com/api.json/0.2/` | Rarely needs changing. |
+| `QOBUZ_APP_ID` | `123456789` | Obtain with the [App ID/Secret tool](https://github.com/QobuzDL/Qobuz-AppID-Secret-Tool). |
+| `QOBUZ_SECRET` | *(hex string)* | Paired with the app ID by the same tool. |
+| `QOBUZ_AUTH_TOKENS` | `["your-token"]` | A JSON array. One or more user auth tokens — the array is chosen from at random per request. |
+
+Optional:
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_APPLICATION_NAME` | `Qobuz-DL` | Renames the wordmark and metadata. |
+| `NEXT_PUBLIC_GITHUB` | *(unset)* | Header link. |
+| `NEXT_PUBLIC_DISCORD` | *(unset)* | Header link. |
+| `CORS_PROXY` | *(unset)* | Leave empty unless you know what you're doing. |
+| `SOCKS5_PROXY` | *(unset)* | Leave empty unless you know what you're doing. |
+
+> [!NOTE]
+> To download tracks longer than 30 seconds you need a **valid Qobuz user auth token** from a paying membership. Find it under the `localuser.token` key in localStorage on [play.qobuz.com](https://play.qobuz.com/) while signed in, and put it in `QOBUZ_AUTH_TOKENS`.
+
+See [`.env.vercel.example`](.env.vercel.example) for a copy-pasteable set.
 
 ## Table of Contents
 
+- [Deploy to Vercel](#deploy-to-vercel)
 - [Installation](#installation)
+- [Getting your Qobuz credentials](#getting-your-qobuz-credentials)
+- [Docker](#docker)
+- [Development](#development)
+- [Architecture](#architecture)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Installation
 
-Before you begin, ensure you have the following installed:
+Before you begin, ensure you have **Node.js** LTS installed ([download](https://nodejs.org/)). Check with:
 
-- **Node.js** (LTS version recommended)  
-  Download from: [https://nodejs.org/](https://nodejs.org/)
-
-- **npm** (comes with Node.js)  
-  To check if npm is installed, run:
-    ```bash
-    npm -v
-    ```
-
-## Getting Started
+```bash
+node -v
+```
 
 ### 1. Clone the repo
 
@@ -48,56 +78,110 @@ git clone https://github.com/QobuzDL/Qobuz-DL.git
 cd Qobuz-DL
 ```
 
-### 3. Install Dependencies
+### 3. Install dependencies
 
 ```bash
-npm i
+npm install
 ```
 
-### 4. Run the development server
+### 4. Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` and fill in your credentials — see [Getting your Qobuz credentials](#getting-your-qobuz-credentials). The default configuration will NOT work.
+
+### 5. Run the development server
 
 ```bash
 npm run dev
 ```
 
-## Docker Installation
+## Getting your Qobuz credentials
 
-### 1. Clone the repo
+1. **App ID and secret** — use the [Qobuz AppID/Secret tool](https://github.com/QobuzDL/Qobuz-AppID-Secret-Tool). These identify the client and are required for any API call.
+2. **User auth token** — sign in at [play.qobuz.com](https://play.qobuz.com/), open your browser's developer tools, and read the `localuser.token` value from localStorage. A paying membership is required for full-length downloads.
 
-```bash
-git clone https://github.com/QobuzDL/Qobuz-DL.git
+`QOBUZ_AUTH_TOKENS` accepts a JSON array, so you can supply several and the app will pick one per request:
+
+```env
+QOBUZ_AUTH_TOKENS = ["token-one","token-two"]
 ```
 
-### 2. Navigate to the project directory
+## Docker
 
-```bash
-cd Qobuz-DL
-```
-
-### 3. Dockerfile build
+### 1. Build the image
 
 ```bash
 docker build -t qobuz-dl .
 ```
 
-### 4. Docker compose
+### 2. Run with compose
 
 ```bash
 docker-compose up -d
 ```
 
-### Setup .env (IMPORTANT)
+Pass credentials with an env file:
 
-Before you can use Qobuz-DL, you need to change the .env file in the root directory. The default configuration will NOT work. QOBUZ_APP_ID and QOBUZ_SECRET must be set to the correct values. To find these you can use [this tool](https://github.com/QobuzDL/Qobuz-AppID-Secret-Tool).
-Additionally, in order to download files longer than 30 seconds, a valid Qobuz token is needed. This can be found in the localuser.token key of localstorage on the [official Qobuz website](https://play.qobuz.com/) for any paying members.
+```bash
+docker run --env-file .env -p 3000:3000 qobuz-dl
+```
+
+## Development
+
+```bash
+npm run dev        # dev server (Turbopack)
+npm run build      # production build
+npm run start      # serve the production build
+npm run lint       # ESLint
+npm run typecheck  # tsc --noEmit
+npm test           # Vitest (run once)
+npm run test:watch # Vitest (watch)
+```
+
+The app requires no environment variables to build — a missing `NEXT_PUBLIC_APPLICATION_NAME` falls back to `Qobuz-DL` rather than failing the build.
+
+### Country tokens
+
+Availability and pricing vary by country. To pin tokens per country instead of choosing at random, populate `config/token-countries.ts`:
+
+```ts
+export const tokenCountriesMap: TokenCountry[] = [
+    { code: 'US', token: 'TOKEN HERE' }
+];
+```
+
+When this list is non-empty it takes precedence over `QOBUZ_AUTH_TOKENS`, and the UI exposes a country picker.
+
+## Architecture
+
+The codebase is organised so that each module is **deep**: a small interface with a lot of behaviour behind it, placed at a seam where something genuinely varies.
+
+| Module | Responsibility | Seam / adapters |
+| --- | --- | --- |
+| `lib/persisted-config.tsx` | localStorage read/validate/write rhythm, once | Storage: `localStorage` in the browser, in-memory fake in tests |
+| `lib/settings-schema.ts` | What a valid `Settings` object is | `zod` schema; `SettingsProps` is inferred from it, so type and validator cannot drift |
+| `lib/api/` | `/api/*` envelope: country header, param parsing, error mapping | Client transport is injected, so tests substitute a fake |
+| `lib/status-bar/` | Job queue: one at a time, ordered, cancellable | Queue state is owned by the module, not by React |
+| `lib/ffmpeg-functions.tsx` | Transcoding and metadata | `ffmpeg.wasm` adapter and FLAC-worker adapter behind one port |
+| `lib/search/` | Result pagination and filtering | Pure merge over `(previous, page)` |
+
+Conventions worth knowing before you change anything:
+
+- **`lib/` must not import from `components/`.** Types and logic that a component displays live in `lib/`; the component imports them. This keeps `lib/` testable without mounting React.
+- **Prefer a seam with two adapters.** One adapter means the seam is hypothetical; two means it is real. If you add an interface, name the second implementation — including the test fake.
+- **Validate at the boundary.** Settings come from localStorage and catalogue data comes from Qobuz; both are untrusted and are parsed by a schema, never cast with `as`.
 
 ## Contributing
 
 1. Fork the repository.
 2. Create a new branch: `git checkout -b feature-name`.
 3. Make your changes.
-4. Push your branch: `git push origin feature-name`.
-5. Create a pull request.
+4. Add tests for behaviour changes — `npm test` must pass, along with `npm run typecheck`, `npm run lint`, and `npm run build`.
+5. Push your branch: `git push origin feature-name`.
+6. Create a pull request.
 
 ## License
 
