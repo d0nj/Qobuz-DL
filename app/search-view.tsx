@@ -1,6 +1,5 @@
 'use client';
 
-import axios from 'axios';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import ReleaseCard from '@/components/release-card';
 import SearchBar from '@/components/search-bar/search-bar';
@@ -9,6 +8,7 @@ import { Disc3Icon, DiscAlbumIcon, UsersIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FilterDataType, filterExplicit, QobuzAlbum, QobuzArtist, QobuzSearchFilters, QobuzSearchResults, QobuzTrack } from '@/lib/qobuz-dl';
 import { APPLICATION_NAME, IS_DEFAULT_APPLICATION_NAME } from '@/lib/app-config';
+import { getApiClient } from '@/lib/api/client';
 import { getTailwindBreakpoint } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useInView } from 'react-intersection-observer';
@@ -17,7 +17,9 @@ import { useTheme } from 'next-themes';
 import CountryPicker from '@/components/country-picker';
 import { useCountry } from '@/lib/country-provider';
 
-export const filterData: FilterDataType = [
+// `value` is narrowed to the result-set keys so the pagination code can index a
+// typed `QobuzSearchResults` with it; `searchRoute` stays available.
+export const filterData: (FilterDataType[number] & { value: QobuzSearchFilters })[] = [
     {
         label: 'Albums',
         value: 'albums',
@@ -59,59 +61,65 @@ const SearchView = () => {
     
     const [scrollTrigger, isInView] = useInView();
 
-    const fetchMore = () => {
+    const fetchMore = async () => {
         if (loading) return;
         setLoading(true);
         const filter = filterData.find((fd) => fd.value == searchField) || filterData[0];
+        const route = filter.searchRoute ? `/api/${filter.searchRoute}` : getApiClient().routes.search;
+        // `q` is form-encoded here; the previous hand-built URL broke on any query
+        // containing `&`, `#`, `+` or non-ASCII characters.
+        const response = await getApiClient().get<QobuzSearchResults>(route, {
+            params: { q: query, offset: results![searchField].items.length },
+            country
+        });
+        if (!response.success) {
+            setLoading(false);
+            return;
+        }
+        // Handled loosely on purpose: the pagination path below nulls out items to
+        // reserve skeleton slots, which the typed `QobuzSearchResults` cannot
+        // express. (axios returned `any` here before.) The render path already
+        // treats falsy items as placeholders.
+        const data = response.data as any;
         if (filter.searchRoute) {
-            axios
-                .get('/api/' + filter.searchRoute + `?q=${query}&offset=${results![searchField].items.length}`, { headers: { 'Token-Country': country } })
-                .then((response) => {
-                    if (response.status === 200) {
-                        response.data.data[searchField].items.length = Math.max(
-                            response.data.data[searchField].items.length,
-                            Math.min(response.data.data[searchField].limit, response.data.data[searchField].total - response.data.data[searchField].offset)
-                        );
-                        response.data.data[searchField].items.fill(null, response.data.data[searchField].items.length);
-                        const newResults = {
-                            ...results!,
-                            [searchField]: {
-                                ...results![searchField],
-                                items: [...results![searchField].items, ...response.data.data[searchField].items]
-                            }
-                        };
-                        setLoading(false);
-                        if (query === response.data.data.query) setResults(newResults);
-                    }
-                });
-        } else {
-            axios.get(`/api/get-music?q=${query}&offset=${results![searchField].items.length}`, { headers: { 'Token-Country': country } }).then((response) => {
-                if (response.status === 200) {
-                    let newResults = {
-                        ...results!,
-                        [searchField]: {
-                            ...results!.albums,
-                            items: [...results!.albums.items, ...response.data.data.albums.items]
-                        }
-                    };
-                    filterData.map((filter) => {
-                        response.data.data[filter.value].items.length = Math.max(
-                            response.data.data[filter.value].items.length,
-                            Math.min(response.data.data[filter.value].limit, response.data.data[filter.value].total - response.data.data[filter.value].offset)
-                        );
-                        response.data.data[filter.value].items.fill(null, response.data.data[filter.value].items.length);
-                        newResults = {
-                            ...newResults,
-                            [filter.value]: {
-                                ...results![filter.value as QobuzSearchFilters],
-                                items: [...results![filter.value as QobuzSearchFilters].items, ...response.data.data[filter.value].items]
-                            }
-                        };
-                    });
-                    setLoading(false);
-                    if (query === response.data.data.query) setResults(newResults);
+            data[searchField].items.length = Math.max(
+                data[searchField].items.length,
+                Math.min(data[searchField].limit, data[searchField].total - data[searchField].offset)
+            );
+            data[searchField].items.fill(null, data[searchField].items.length);
+            const newResults = {
+                ...results!,
+                [searchField]: {
+                    ...results![searchField],
+                    items: [...results![searchField].items, ...data[searchField].items]
                 }
+            };
+            setLoading(false);
+            if (query === data.query) setResults(newResults);
+        } else {
+            let newResults = {
+                ...results!,
+                [searchField]: {
+                    ...results!.albums,
+                    items: [...results!.albums.items, ...data.albums.items]
+                }
+            };
+            filterData.map((filter) => {
+                data[filter.value].items.length = Math.max(
+                    data[filter.value].items.length,
+                    Math.min(data[filter.value].limit, data[filter.value].total - data[filter.value].offset)
+                );
+                data[filter.value].items.fill(null, data[filter.value].items.length);
+                newResults = {
+                    ...newResults,
+                    [filter.value]: {
+                        ...results![filter.value as QobuzSearchFilters],
+                        items: [...results![filter.value as QobuzSearchFilters].items, ...data[filter.value].items]
+                    }
+                };
             });
+            setLoading(false);
+            if (query === data.query) setResults(newResults);
         }
     };
 
@@ -180,16 +188,16 @@ const SearchView = () => {
         setSearchError('');
         const filter = filterData.find((filter) => filter.value === searchFieldInput) || filterData[0];
         try {
-            const response = await axios.get(`/api/${filter.searchRoute ? filter.searchRoute : 'get-music'}?q=${query}&offset=0`, {
-                headers: {
-                    'Token-Country': country
-                }
+            const route = filter.searchRoute ? `/api/${filter.searchRoute}` : getApiClient().routes.search;
+            const response = await getApiClient().get<QobuzSearchResults>(route, {
+                params: { q: query, offset: 0 },
+                country
             });
-            if (response.status === 200) {
+            if (response.success) {
                 setLoading(false);
                 if (searchField !== searchFieldInput) setSearchField(searchFieldInput as QobuzSearchFilters);
 
-                let newResults = { ...response.data.data };
+                let newResults = { ...response.data };
                 filterData.map((filter) => {
                     if (!newResults[filter.value])
                         newResults = {
@@ -205,7 +213,7 @@ const SearchView = () => {
                 setResults(newResults);
             }
         } catch (error: any) {
-            setSearchError(error?.response.data?.error || error.message || 'An error occurred.');
+            setSearchError(error?.detail || error.message || 'An error occurred.');
         }
         setSearching(false);
     };

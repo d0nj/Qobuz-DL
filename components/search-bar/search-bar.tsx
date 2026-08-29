@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '../ui/button';
 import { ArrowRightIcon, Loader2Icon, SearchIcon } from 'lucide-react';
 import { Label } from '../ui/label';
-import axios from 'axios';
+import { getApiClient } from '@/lib/api/client';
 import { QobuzSearchResults } from '@/lib/qobuz-dl';
 import AutocompleteCard from './autocomplete-card';
 import { useCountry } from '@/lib/country-provider';
@@ -69,13 +69,15 @@ const SearchBar = ({
         try {
             setTimeout(async () => {
                 try {
-                    const response = await axios.get(`/api/get-music?q=${searchInput}&offset=0`, {
-                        headers: {
-                            'Token-Country': country
-                        },
+                    // Params are form-encoded by the client, so a query containing
+                    // `&`, `#` or `+` reaches the server intact instead of being
+                    // split into extra parameters.
+                    const response = await getApiClient().get<QobuzSearchResults>(getApiClient().routes.search, {
+                        params: { q: searchInput, offset: 0 },
+                        country,
                         signal: newController.signal
                     });
-                    if (response.status === 200) setResults(response.data.data);
+                    if (response.success) setResults(response.data);
                 } catch {}
             }, 200);
         } catch {}

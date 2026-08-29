@@ -1,4 +1,5 @@
-import axios, { AxiosRequestConfig } from 'axios';
+import { AxiosRequestConfig } from 'axios';
+import { getApiClient } from '@/lib/api/client';
 import { LucideIcon } from 'lucide-react';
 
 export type APIOptionProps = Partial<
@@ -260,7 +261,10 @@ export async function getFullAlbumInfo(
 ) {
     if (fetchedAlbumData && (fetchedAlbumData as FetchedQobuzAlbum).id === (result as QobuzAlbum).id) return fetchedAlbumData;
     setFetchedAlbumData(null);
-    const albumDataResponse = await axios.get('/api/get-album', { params: { album_id: (result as QobuzAlbum).id }, headers: { 'Token-Country': country } });
-    setFetchedAlbumData(albumDataResponse.data.data);
-    return albumDataResponse.data.data;
+    const albumData = await getApiClient().unwrap<FetchedQobuzAlbum>(getApiClient().routes.album, {
+        params: { album_id: (result as QobuzAlbum).id },
+        country
+    });
+    setFetchedAlbumData(albumData);
+    return albumData;
 }
