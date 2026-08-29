@@ -8,8 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Disc3Icon, DiscAlbumIcon, UsersIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FilterDataType, filterExplicit, QobuzAlbum, QobuzArtist, QobuzSearchFilters, QobuzSearchResults, QobuzTrack } from '@/lib/qobuz-dl';
-import { cn, getTailwindBreakpoint } from '@/lib/utils';
-import { motion } from 'motion/react';
+import { getTailwindBreakpoint } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useInView } from 'react-intersection-observer';
 import { useSettings } from '@/lib/settings-provider';
@@ -213,20 +212,14 @@ const SearchView = () => {
     useEffect(() => {
         if (country && query) onSearch(query);
     }, [country]);
-return (
+    return (
         <>
             <div className='space-y-4'>
-                <motion.div
-                    className='flex flex-col select-none cursor-pointer items-center'
-                    onClick={() => {
-                        setQuery('');
-                        setResults(null);
-                        setSearchField('albums');
-                    }}
-                    initial={{ opacity: 0, y: -18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                >
+                <div className='flex flex-col select-none cursor-pointer items-center animate-[wordmark-in_600ms_cubic-bezier(0.22,1,0.36,1)_both]' onClick={() => {
+                    setQuery('');
+                    setResults(null);
+                    setSearchField('albums');
+                }}>
                     {process.env.NEXT_PUBLIC_APPLICATION_NAME!.toLowerCase() === 'qobuz-dl' ? (
                         <h1 className='font-serif text-[64px] leading-none md:text-[96px] tracking-tight text-foreground'>
                             Qobuz<span className='italic'>—</span>DL
@@ -236,8 +229,8 @@ return (
                             {process.env.NEXT_PUBLIC_APPLICATION_NAME}
                         </h1>
                     )}
-                    <p className='index-numeral mt-3'>A FRONTEND BROWSER CLIENT FOR DOWNLOADING MUSIC FOR QOBUZ</p>
-                </motion.div>
+                    <p className='index-numeral mt-3'>A frontend browser client for downloading music for Qobuz</p>
+                </div>
                 <div className='flex flex-col items-start justify-center'>
                     <SearchBar onSearch={onSearch} searching={searching} setSearching={setSearching} query={query} />
 
@@ -246,16 +239,16 @@ return (
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     variant='ghost'
-                                    className='my-2 flex gap-2.5 focus-visible:outline-none focus-visible:ring-transparent select-none shadow-none outline-none !z-[99] px-2 font-mono text-xs tracking-widest uppercase text-muted-foreground hover:text-foreground hover:bg-transparent'
+                                    className='my-2 flex items-center gap-2.5 focus-visible:outline-none select-none shadow-none outline-none !z-[99] px-2 text-xs font-medium tracking-tight text-muted-foreground transition-colors hover:text-foreground hover:bg-transparent'
                                 >
-                                    <span className={cn('inline-block h-px w-4 transition-all', 'bg-muted-foreground')} />
+                                    <span className='inline-block h-px w-4 bg-border transition-colors group-data-[state=open]:bg-primary' />
                                     {searchField}
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align='start' className='min-w-[10rem]'>
                                 <DropdownMenuRadioGroup value={searchField} onValueChange={setSearchField as React.Dispatch<React.SetStateAction<string>>}>
                                     {filterData.map((type, index) => (
-                                        <DropdownMenuRadioItem key={index} value={type.value} className='font-mono text-xs tracking-widest uppercase'>
+                                        <DropdownMenuRadioItem key={index} value={type.value} className='text-xs font-medium'>
                                             {type.label}
                                         </DropdownMenuRadioItem>
                                     ))}
