@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Disc3Icon, DiscAlbumIcon, UsersIcon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FilterDataType, filterExplicit, QobuzAlbum, QobuzArtist, QobuzSearchFilters, QobuzSearchResults, QobuzTrack } from '@/lib/qobuz-dl';
+import { APPLICATION_NAME, IS_DEFAULT_APPLICATION_NAME } from '@/lib/app-config';
 import { getTailwindBreakpoint } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useInView } from 'react-intersection-observer';
@@ -220,13 +221,13 @@ const SearchView = () => {
                     setResults(null);
                     setSearchField('albums');
                 }}>
-                    {process.env.NEXT_PUBLIC_APPLICATION_NAME!.toLowerCase() === 'qobuz-dl' ? (
+                    {IS_DEFAULT_APPLICATION_NAME ? (
                         <h1 className='font-serif text-[64px] leading-none md:text-[96px] tracking-tight text-foreground'>
                             Qobuz<span className='italic'>—</span>DL
                         </h1>
                     ) : (
                         <h1 className='font-serif text-[48px] leading-none md:text-[72px] tracking-tight text-foreground'>
-                            {process.env.NEXT_PUBLIC_APPLICATION_NAME}
+                            {APPLICATION_NAME}
                         </h1>
                     )}
                     <p className='index-numeral mt-3'>A frontend browser client for downloading music for Qobuz</p>

@@ -1,31 +1,41 @@
 'use client';
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
-const CountryContext = createContext<
-    | {
-          country: string | undefined;
-          setCountry: React.Dispatch<React.SetStateAction<string | undefined>>;
-      }
-    | undefined
->(undefined);
+import React, { createContext, useMemo } from 'react';
+import { usePersistedConfig, type PersistedConfigModule } from './persisted-config';
 
-export const CountryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [country, setCountry] = useState<string | undefined>(undefined);
+export type CountryContextValue = {
+    country: string | undefined;
+    setCountry: React.Dispatch<React.SetStateAction<string | undefined>>;
+};
 
-    useEffect(() => {
-        const savedCountry = localStorage.getItem('country');
-        if (savedCountry) setCountry(savedCountry);
-    }, []);
+const COUNTRY_KEY = 'country';
 
-    useEffect(() => {
-        if (country) localStorage.setItem('country', country);
-    }, [country]);
+const parseCountry = (raw: unknown): string | undefined | null => {
+    if (raw === null || raw === undefined) return undefined;
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+};
 
-    return <CountryContext.Provider value={{ country, setCountry }}>{children}</CountryContext.Provider>;
+const countryModule: PersistedConfigModule<string | undefined> = {
+    storageKey: COUNTRY_KEY,
+    defaultValue: undefined,
+    parse: parseCountry,
+    serialize: (value) => JSON.stringify(value ?? '')
+};
+
+const CountryContext = createContext<CountryContextValue | undefined>(undefined);
+
+export const CountryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { value, setValue } = usePersistedConfig(countryModule);
+
+    const contextValue = useMemo<CountryContextValue>(() => ({ country: value, setCountry: setValue }), [value, setValue]);
+
+    return <CountryContext.Provider value={contextValue}>{children}</CountryContext.Provider>;
 };
 
 export const useCountry = () => {
-    const context = useContext(CountryContext);
+    const context = React.useContext(CountryContext);
 
     if (!context) {
         throw new Error('useCountry must be used within a CountryProvider');
