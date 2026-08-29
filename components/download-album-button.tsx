@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 export interface DownloadAlbumButtonProps extends ButtonProps {
     result: QobuzAlbum;
     setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>;
-    ffmpegState: FFmpegType;
+    ffmpegState: FFmpegType | null;
     settings: SettingsProps;
     fetchedAlbumData: FetchedQobuzAlbum | null;
     setFetchedAlbumData: React.Dispatch<React.SetStateAction<FetchedQobuzAlbum | null>>;
