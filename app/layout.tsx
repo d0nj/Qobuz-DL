@@ -2,14 +2,12 @@ import StatusBarContainer from '@/components/status-bar/container';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Button } from '@/components/ui/button';
 import ChangelogDialog from '@/components/ui/changelog-dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import SettingsForm from '@/components/ui/settings-form';
 import { Toaster } from '@/components/ui/sonner';
 import { CountryProvider } from '@/lib/country-provider';
 import { FFmpegProvider } from '@/lib/ffmpeg-provider';
 import { SettingsProvider } from '@/lib/settings-provider';
 import { StatusBarProvider } from '@/lib/status-bar/context';
-import { FaDiscord } from '@react-icons/all-files/fa/FaDiscord';
 import { FaGithub } from '@react-icons/all-files/fa/FaGithub';
 import type { Metadata } from 'next';
 import { Geist, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
@@ -85,41 +83,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                         <StatusBarProvider>
                             <SettingsProvider>
                                 <ThemeProvider attribute='class' defaultTheme='dark' enableSystem>
-                                    <div className='grain-field' aria-hidden='true'>
-                                        <svg width='100%' height='100%'>
-                                            <filter id='gallery-grain'>
-                                                <feTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='2' stitchTiles='stitch' />
-                                                <feColorMatrix type='saturate' values='0' />
-                                            </filter>
-                                            <rect width='100%' height='100%' filter='url(#gallery-grain)' />
-                                        </svg>
-                                    </div>
+                                    <div className='grain-field' aria-hidden='true' />
                                     <div className='fixed justify-between items-start flex w-full max-w-screen p-4 z-[10]'>
                                         <div className='flex flex-col gap-2'>
                                             <SettingsForm />
                                             <ChangelogDialog />
                                         </div>
                                         <div className='flex gap-2 items-center'>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant='ghost' size='icon'>
-                                                        <FaDiscord />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent>
-                                                    <DropdownMenuItem>
-                                                        <a href='https://discord.gg/rhUUKQagjA' target='_blank' rel='noopener noreferrer'>
-                                                            Qobuz-DL Discord
-                                                        </a>
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem>
-                                                        <a href='https://discord.gg/invite/GN7GnntyQ2' target='_blank' rel='noopener noreferrer'>
-                                                            Squidboard Discord
-                                                        </a>
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                            <a href='https://github.com/QobuzDL/Qobuz-DL' target='_blank' rel='noopener noreferrer'>
+                                            <a href='https://github.com/d0nj/Qobuz-DL' target='_blank' rel='noopener noreferrer'>
                                                 <Button variant='ghost' size='icon'>
                                                     <FaGithub />
                                                 </Button>
