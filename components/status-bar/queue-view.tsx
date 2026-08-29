@@ -77,7 +77,7 @@ const QueueView = ({ queueItems }: { queueItems: QueueProps[] }) => {
                 </ScrollArea>
 
                 {items.length === 0 && !statusBar.processing && (
-                    <div className='p-4 py-6 border-2 border-dashed text-center flex items-center justify-center rounded-lg'>
+                    <div className='p-4 py-6 border border-dashed border-border text-center flex items-center justify-center rounded-none'>
                         <p className='text-muted-foreground text-sm'>No items found.</p>
                     </div>
                 )}

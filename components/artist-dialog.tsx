@@ -105,7 +105,7 @@ const ArtistDialog = ({ open, setOpen, artist }: { open: boolean; setOpen: (open
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent className='w-[1000px] max-w-[90%] md:max-w-[80%] overflow-hidden'>
                 <div className='flex gap-3 overflow-hidden'>
-                    <div className='relative shrink-0 aspect-square min-w-[100px] min-h-[100px] rounded-sm overflow-hidden'>
+                    <div className='relative shrink-0 aspect-square min-w-[100px] min-h-[100px] rounded-none overflow-hidden'>
                         {(artist.image?.small || artistResults?.artist.images.portrait) && <Skeleton className='absolute aspect-square w-full h-full' />}
                         {artist.image?.small || artistResults?.artist.images.portrait ? (
                             <Image
@@ -294,7 +294,7 @@ const ArtistReleaseSection = ({
                                             return (
                                                 <div key={index} className='relative min-w-[40%]'>
                                                     <Skeleton
-                                                        className='relative w-full aspect-square group select-none rounded-sm overflow-hidden'
+                                                        className='relative w-full aspect-square group select-none rounded-none overflow-hidden'
                                                         ref={index === 0 ? scrollTrigger : null}
                                                     />
                                                     <div className='h-[40px]'></div>

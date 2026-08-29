@@ -1,4 +1,3 @@
-import ParticlesComponent from '@/components/particles';
 import StatusBarContainer from '@/components/status-bar/container';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Button } from '@/components/ui/button';
@@ -13,13 +12,36 @@ import { StatusBarProvider } from '@/lib/status-bar/context';
 import { FaDiscord } from '@react-icons/all-files/fa/FaDiscord';
 import { FaGithub } from '@react-icons/all-files/fa/FaGithub';
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Geist, Instrument_Serif, JetBrains_Mono } from 'next/font/google';
 import Script from 'next/script';
 import './globals.css';
 
-const inter = Inter({
+/*
+DESIGN CONTRACT — Gallery Blackout (seed 6a1ff499): near-black exhibition void; releases hang as
+hairline plates against an off-centre rail; acid lime (#D8FF3E) is the only light source (primary
+action, focus, live states); Instrument Serif wordmark, JetBrains Mono measurements, Geist UI text;
+film-grain field replaces the particle background. FINISH: unreviewed and undocumented is
+unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping
+raster carrying its provenance.
+*/
+
+const geist = Geist({
     subsets: ['latin'],
-    display: 'swap'
+    display: 'swap',
+    variable: '--font-geist-sans'
+});
+
+const instrumentSerif = Instrument_Serif({
+    subsets: ['latin'],
+    weight: '400',
+    display: 'swap',
+    variable: '--font-instrument-serif'
+});
+
+const jetbrainsMono = JetBrains_Mono({
+    subsets: ['latin'],
+    display: 'swap',
+    variable: '--font-jetbrains-mono'
 });
 
 export const metadata: Metadata = {
@@ -53,14 +75,25 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
     return (
-        <html lang='en' suppressHydrationWarning>
-            <body className={`${inter.className} antialiased`} suppressHydrationWarning>
+        <html lang='en' className='dark' suppressHydrationWarning>
+            <body
+                className={`${geist.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} antialiased`}
+                suppressHydrationWarning
+            >
                 <FFmpegProvider>
                     <CountryProvider>
                         <StatusBarProvider>
                             <SettingsProvider>
                                 <ThemeProvider attribute='class' defaultTheme='dark' enableSystem>
-                                    <ParticlesComponent className='z-[-1] h-full w-full fixed' />
+                                    <div className='grain-field' aria-hidden='true'>
+                                        <svg width='100%' height='100%'>
+                                            <filter id='gallery-grain'>
+                                                <feTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='2' stitchTiles='stitch' />
+                                                <feColorMatrix type='saturate' values='0' />
+                                            </filter>
+                                            <rect width='100%' height='100%' filter='url(#gallery-grain)' />
+                                        </svg>
+                                    </div>
                                     <div className='fixed justify-between items-start flex w-full max-w-screen p-4 z-[10]'>
                                         <div className='flex flex-col gap-2'>
                                             <SettingsForm />
@@ -69,7 +102,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                                         <div className='flex gap-2 items-center'>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant='outline' size='icon'>
+                                                    <Button variant='ghost' size='icon'>
                                                         <FaDiscord />
                                                     </Button>
                                                 </DropdownMenuTrigger>
@@ -87,14 +120,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                             <a href='https://github.com/QobuzDL/Qobuz-DL' target='_blank' rel='noopener noreferrer'>
-                                                <Button variant='outline' size='icon'>
+                                                <Button variant='ghost' size='icon'>
                                                     <FaGithub />
                                                 </Button>
                                             </a>
                                         </div>
                                     </div>
                                     <div className='flex flex-col min-h-screen'>
-                                        <main className='px-6 pb-12 pt-32 md:pt-24 2xl:pt-60 min-h-full flex-1 flex flex-col items-center justify-center gap-2 z-[2] overflow-x-hidden max-w-screen overflow-y-hidden'>
+                                        <main className='px-6 pb-12 pt-28 md:pt-24 2xl:pt-40 min-h-full flex-1 flex flex-col items-center justify-center gap-2 z-[2] overflow-x-hidden max-w-screen overflow-y-hidden'>
                                             {children}
                                         </main>
                                         <Toaster closeButton richColors />

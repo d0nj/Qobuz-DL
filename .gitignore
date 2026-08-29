@@ -41,3 +41,5 @@ next-env.d.ts
 # environment
 .env*
 !.env.example
+# impeccable working artifacts
+.impeccable/
