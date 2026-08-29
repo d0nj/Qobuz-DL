@@ -4,8 +4,9 @@ import { FFmpegType, fixMD5Hash, loadFFmpeg, ProgressReporter, transcodeTrack } 
 import { codecMap, needsEncoder } from './transcode';
 import { cleanFileName, formatBytes, formatCustomTitle, resizeImage } from './utils';
 import { createJob, getActiveQueue } from './status-bar/jobs';
-import { Disc3Icon, DiscAlbumIcon } from 'lucide-react';
-import { artistReleaseCategories, FetchedQobuzAlbum, formatTitle, getFullResImageUrl, QobuzAlbum, QobuzArtistResults, QobuzTrack } from './qobuz-dl';
+import { AlbumCache, DownloadRequest } from './download/request';
+import { Disc3Icon, DiscAlbumIcon, LucideIcon } from 'lucide-react';
+import { artistReleaseCategories, FetchedQobuzAlbum, formatTitle, getFullResImageUrl, isTrack, QobuzAlbum, QobuzArtistResults, QobuzTrack } from './qobuz-dl';
 import { SettingsProps } from './settings-provider';
 import { getApiClient } from '@/lib/api/client';
 import { StatusBarProps } from './status-bar/types';
@@ -22,253 +23,290 @@ function makeReporter(setStatusBar: React.Dispatch<React.SetStateAction<StatusBa
         }));
 }
 
-export const createDownloadJob = async (
-    result: QobuzAlbum | QobuzTrack,
+/**
+ * Queue a download.
+ *
+ * The deep entry point: one request object, one place where cancellation,
+ * progress and error handling live.
+ */
+/** Queues one download job under the active queue. */
+function enqueueDownload(
     setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>,
-    ffmpegState: FFmpegType | null,
-    settings: SettingsProps,
-    fetchedAlbumData?: FetchedQobuzAlbum | null,
-    setFetchedAlbumData?: React.Dispatch<React.SetStateAction<FetchedQobuzAlbum | null>>,
-    country?: string
+    title: string,
+    icon: LucideIcon,
+    run: () => Promise<void>
+) {
+    return createJob({ queue: getActiveQueue(), setStatusBar, title, icon, run });
+}
+
+export const download = async (
+    request: DownloadRequest,
+    setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>,
+    ffmpegState: FFmpegType | null
 ) => {
-    if ((result as QobuzTrack).album) {
-        const formattedTitle = formatCustomTitle(settings.trackName, result as QobuzTrack);
-        await createJob({ queue: getActiveQueue(), setStatusBar, title: formattedTitle, icon: Disc3Icon, run: async () => {
-            return new Promise(async (resolve) => {
-                try {
-                    const controller = new AbortController();
-                    const signal = controller.signal;
-                    let cancelled = false;
-                    setStatusBar((prev) => ({
-                        ...prev,
-                        progress: 0,
-                        title: `Downloading ${formatTitle(result)}`,
-                        description: `Loading FFmpeg`,
-                        onCancel: () => {
-                            cancelled = true;
-                            controller.abort();
+    const { target, settings, country, albumCache } = request;
+
+    if (isTrack(target)) {
+        const track = target as QobuzTrack;
+        const title = formatCustomTitle(settings.trackName, track);
+        await enqueueDownload(setStatusBar, title, Disc3Icon, () => runTrackDownload(track, { settings, country, setStatusBar, ffmpegState }));
+        return;
+    }
+
+    const album = target as QobuzAlbum;
+    const title = formatCustomTitle(settings.zipName, album);
+    await enqueueDownload(setStatusBar, title, DiscAlbumIcon, () =>
+        runAlbumDownload(album, { settings, country, setStatusBar, ffmpegState, albumCache })
+    );
+};
+
+async function runTrackDownload(
+    result: QobuzTrack,
+    ctx: { settings: SettingsProps; country?: string; setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>; ffmpegState: FFmpegType | null }
+) {
+    const { settings, country, setStatusBar, ffmpegState } = ctx;
+    return new Promise<void>(async (resolve) => {
+        try {
+            const controller = new AbortController();
+            const signal = controller.signal;
+            let cancelled = false;
+            setStatusBar((prev) => ({
+                ...prev,
+                progress: 0,
+                title: `Downloading ${formatTitle(result)}`,
+                description: `Loading FFmpeg`,
+                onCancel: () => {
+                    cancelled = true;
+                    controller.abort();
+                }
+            }));
+            if (needsEncoder(settings)) await loadFFmpeg(ffmpegState, signal);
+            setStatusBar((prev) => ({ ...prev, description: 'Fetching track size...' }));
+            const { url: trackURL } = await getApiClient().unwrap<{ url: string }>(getApiClient().routes.download, {
+                params: { track_id: (result as QobuzTrack).id, quality: settings.outputQuality },
+                country,
+                signal
+            });
+            const fileSizeResponse = await axios.head(trackURL, { signal });
+            const fileSize = fileSizeResponse.headers['content-length'];
+            const response = await axios.get(trackURL, {
+                responseType: 'arraybuffer',
+                onDownloadProgress: (progressEvent) => {
+                    setStatusBar((statusbar) => {
+                        if (statusbar.processing && !cancelled)
+                            return {
+                                ...statusbar,
+                                progress: Math.floor((progressEvent.loaded / fileSize) * 100),
+                                description: `${formatBytes(progressEvent.loaded)} / ${formatBytes(fileSize)}`
+                            };
+                        else return statusbar;
+                    });
+                },
+                signal
+            });
+            setStatusBar((prev) => ({ ...prev, description: `Applying metadata...`, progress: 100 }));
+            const inputFile = response.data;
+            const report = makeReporter(setStatusBar);
+            let outputFile = await transcodeTrack(inputFile, {
+                ffmpeg: ffmpegState,
+                settings,
+                track: result as QobuzTrack,
+                report
+            });
+            if (settings.outputCodec === 'FLAC' && settings.fixMD5) outputFile = new Uint8Array(await fixMD5Hash(outputFile, report));
+            const objectURL = URL.createObjectURL(new Blob([outputFile]));
+            const title = formatCustomTitle(settings.trackName, result) + '.' + codecMap[settings.outputCodec].extension;
+            const audioElement = document.createElement('audio');
+            audioElement.id = `track_${result.id}`;
+            audioElement.src = objectURL;
+            audioElement.onloadedmetadata = function () {
+                if (Math.round(audioElement.duration) >= Math.round(result.duration)) {
+                    proceedDownload(objectURL, title);
+                    resolve();
+                } else {
+                    toast.error(
+                        `Qobuz provided a file shorter than expected for "${title}". This can indicate the file being a sample track rather than the full track`,
+                        {
+                            action: {
+                                label: 'Download anyway',
+                                onClick: () => {
+                                    proceedDownload(objectURL, title);
+                                }
+                            },
+                            duration: Infinity
                         }
-                    }));
-                    if (needsEncoder(settings)) await loadFFmpeg(ffmpegState, signal);
-                    setStatusBar((prev) => ({ ...prev, description: 'Fetching track size...' }));
+                    );
+
+                    resolve();
+                }
+            };
+            document.body.append(audioElement);
+        } catch (e) {
+            if (e instanceof AxiosError && e.code === 'ERR_CANCELED') resolve();
+            else {
+                toast.error(e instanceof Error ? e.message : 'An unknown error occurred', {
+                    action: {
+                        label: 'Copy Stack',
+                        onClick: () => navigator.clipboard.writeText((e as Error).stack!)
+                    }
+                });
+
+                resolve();
+            }
+        }
+    });
+}
+
+async function runAlbumDownload(
+    result: QobuzAlbum,
+    ctx: {
+        settings: SettingsProps;
+        country?: string;
+        setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>;
+        ffmpegState: FFmpegType | null;
+        albumCache?: AlbumCache;
+    }
+) {
+    const { settings, country, setStatusBar, ffmpegState, albumCache } = ctx;
+    let fetchedAlbumData = albumCache?.data ?? null;
+    return new Promise<void>(async (resolve) => {
+        try {
+            const controller = new AbortController();
+            const signal = controller.signal;
+            let cancelled = false;
+            setStatusBar((prev) => ({
+                ...prev,
+                progress: 0,
+                title: `Downloading ${formatTitle(result)}`,
+                description: `Loading FFmpeg...`,
+                onCancel: () => {
+                    cancelled = true;
+                    controller.abort();
+                }
+            }));
+            if (needsEncoder(settings)) await loadFFmpeg(ffmpegState, signal);
+            setStatusBar((prev) => ({ ...prev, description: 'Fetching album data...' }));
+            if (!fetchedAlbumData) {
+                fetchedAlbumData = await getApiClient().unwrap<FetchedQobuzAlbum>(getApiClient().routes.album, {
+                    params: { album_id: (result as QobuzAlbum).id },
+                    country,
+                    signal
+                });
+                if (albumCache?.setData) {
+                    albumCache?.setData(fetchedAlbumData);
+                }
+            }
+            const albumTracks = fetchedAlbumData!.tracks.items.map((track: QobuzTrack) => ({
+                ...track,
+                album: fetchedAlbumData
+            })) as QobuzTrack[];
+            let totalAlbumSize = 0;
+            const albumUrls = [] as string[];
+            setStatusBar((prev) => ({ ...prev, description: 'Fetching album size...' }));
+            let currentDisk = 1;
+            let trackOffset = 0;
+            for (const [index, track] of albumTracks.entries()) {
+                if (track.streamable) {
                     const { url: trackURL } = await getApiClient().unwrap<{ url: string }>(getApiClient().routes.download, {
-                        params: { track_id: (result as QobuzTrack).id, quality: settings.outputQuality },
+                        params: { track_id: track.id, quality: settings.outputQuality },
                         country,
                         signal
                     });
+                    if (!(currentDisk === track.media_number)) {
+                        trackOffset = albumUrls.length;
+                        currentDisk = track.media_number;
+                        albumUrls.push(trackURL);
+                    } else albumUrls[track.track_number + trackOffset - 1] = trackURL;
                     const fileSizeResponse = await axios.head(trackURL, { signal });
-                    const fileSize = fileSizeResponse.headers['content-length'];
-                    const response = await axios.get(trackURL, {
+                    setStatusBar((statusBar) => ({
+                        ...statusBar,
+                        progress: (100 / albumTracks.length) * (index + 1)
+                    }));
+                    const fileSize = parseInt(fileSizeResponse.headers['content-length']);
+                    totalAlbumSize += fileSize;
+                }
+            }
+            const trackBuffers = [] as Uint8Array[];
+            let totalBytesDownloaded = 0;
+            setStatusBar((statusBar) => ({ ...statusBar, progress: 0, description: `Fetching album art...` }));
+            const albumArtURL = await resizeImage(getFullResImageUrl(fetchedAlbumData!), settings.albumArtSize, settings.albumArtQuality);
+            const albumArt = albumArtURL ? (await axios.get(albumArtURL, { responseType: 'arraybuffer' })).data : false;
+            for (const [index, url] of albumUrls.entries()) {
+                if (url) {
+                    const response = await axios.get(url, {
                         responseType: 'arraybuffer',
                         onDownloadProgress: (progressEvent) => {
-                            setStatusBar((statusbar) => {
-                                if (statusbar.processing && !cancelled)
-                                    return {
-                                        ...statusbar,
-                                        progress: Math.floor((progressEvent.loaded / fileSize) * 100),
-                                        description: `${formatBytes(progressEvent.loaded)} / ${formatBytes(fileSize)}`
-                                    };
-                                else return statusbar;
-                            });
+                            if (totalBytesDownloaded + progressEvent.loaded < totalAlbumSize)
+                                setStatusBar((statusBar) => {
+                                    if (statusBar.processing && !cancelled)
+                                        return {
+                                            ...statusBar,
+                                            progress: Math.floor(((totalBytesDownloaded + progressEvent.loaded) / totalAlbumSize) * 100),
+                                            description: `${formatBytes(totalBytesDownloaded + progressEvent.loaded)} / ${formatBytes(totalAlbumSize)}`
+                                        };
+                                    else return statusBar;
+                                });
                         },
                         signal
                     });
-                    setStatusBar((prev) => ({ ...prev, description: `Applying metadata...`, progress: 100 }));
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                    totalBytesDownloaded += response.data.byteLength;
                     const inputFile = response.data;
-                    const report = makeReporter(setStatusBar);
+                    const reporter = makeReporter(setStatusBar);
                     let outputFile = await transcodeTrack(inputFile, {
                         ffmpeg: ffmpegState,
                         settings,
-                        track: result as QobuzTrack,
-                        report
+                        track: albumTracks[index],
+                        albumArt,
+                        upc: fetchedAlbumData!.upc,
+                        report: reporter
                     });
-                    if (settings.outputCodec === 'FLAC' && settings.fixMD5) outputFile = new Uint8Array(await fixMD5Hash(outputFile, report));
-                    const objectURL = URL.createObjectURL(new Blob([outputFile]));
-                    const title = formattedTitle + '.' + codecMap[settings.outputCodec].extension;
-                    const audioElement = document.createElement('audio');
-                    audioElement.id = `track_${result.id}`;
-                    audioElement.src = objectURL;
-                    audioElement.onloadedmetadata = function () {
-                        if (Math.round(audioElement.duration) >= Math.round(result.duration)) {
-                            proceedDownload(objectURL, title);
-                            resolve();
-                        } else {
-                            toast.error(
-                                `Qobuz provided a file shorter than expected for "${title}". This can indicate the file being a sample track rather than the full track`,
-                                {
-                                    action: {
-                                        label: 'Download anyway',
-                                        onClick: () => {
-                                            proceedDownload(objectURL, title);
-                                        }
-                                    },
-                                    duration: Infinity
-                                }
-                            );
-
-                            resolve();
-                        }
-                    };
-                    document.body.append(audioElement);
-                } catch (e) {
-                    if (e instanceof AxiosError && e.code === 'ERR_CANCELED') resolve();
-                    else {
-                        toast.error(e instanceof Error ? e.message : 'An unknown error occurred', {
-                            action: {
-                                label: 'Copy Stack',
-                                onClick: () => navigator.clipboard.writeText((e as Error).stack!)
-                            }
-                        });
-
-                        resolve();
-                    }
+                    if (settings.outputCodec === 'FLAC' && settings.fixMD5)
+                        outputFile = new Uint8Array(await fixMD5Hash(outputFile, reporter));
+                    trackBuffers[index] = outputFile;
                 }
-            });
-        }});
-    } else {
-        const formattedZipTitle = formatCustomTitle(settings.zipName, result as QobuzAlbum);
+            }
+            setStatusBar((statusBar) => ({ ...statusBar, progress: 0, description: `Zipping album...` }));
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            const zipFiles = {
+                'cover.jpg': new Uint8Array(albumArt),
+                ...trackBuffers.reduce(
+                    (acc, buffer, index) => {
+                        if (buffer) {
+                            const fileName = `${(index + 1).toString().padStart(Math.max(String(albumTracks.length - 1).length, 2), '0')} ${formatCustomTitle(settings.trackName, albumTracks[index])}.${codecMap[settings.outputCodec].extension}`;
 
-        await createJob({ queue: getActiveQueue(), setStatusBar, title: formattedZipTitle, icon: DiscAlbumIcon, run: async () => {
-            return new Promise(async (resolve) => {
-                try {
-                    const controller = new AbortController();
-                    const signal = controller.signal;
-                    let cancelled = false;
-                    setStatusBar((prev) => ({
-                        ...prev,
-                        progress: 0,
-                        title: `Downloading ${formatTitle(result)}`,
-                        description: `Loading FFmpeg...`,
-                        onCancel: () => {
-                            cancelled = true;
-                            controller.abort();
+                            acc[cleanFileName(fileName)] = new Uint8Array(buffer);
                         }
-                    }));
-                    if (needsEncoder(settings)) await loadFFmpeg(ffmpegState, signal);
-                    setStatusBar((prev) => ({ ...prev, description: 'Fetching album data...' }));
-                    if (!fetchedAlbumData) {
-                        fetchedAlbumData = await getApiClient().unwrap<FetchedQobuzAlbum>(getApiClient().routes.album, {
-                            params: { album_id: (result as QobuzAlbum).id },
-                            country,
-                            signal
-                        });
-                        if (setFetchedAlbumData) {
-                            setFetchedAlbumData(fetchedAlbumData);
-                        }
+                        return acc;
+                    },
+                    {} as { [key: string]: Uint8Array }
+                )
+            } as { [key: string]: Uint8Array };
+            if (albumArt === false) delete zipFiles['cover.jpg'];
+            const zippedFile = zipSync(zipFiles, { level: 0 });
+            const zipBlob = new Blob([zippedFile as BlobPart], { type: 'application/zip' });
+            setStatusBar((prev) => ({ ...prev, progress: 100 }));
+            const objectURL = URL.createObjectURL(zipBlob);
+            saveAs(objectURL, formatCustomTitle(settings.zipName, result) + '.zip');
+            setTimeout(() => {
+                URL.revokeObjectURL(objectURL);
+            }, 100);
+            resolve();
+        } catch (e) {
+            if (e instanceof AxiosError && e.code === 'ERR_CANCELED') resolve();
+            else {
+                toast.error(e instanceof Error ? e.message : 'An unknown error occurred', {
+                    action: {
+                        label: 'Copy Stack',
+                        onClick: () => navigator.clipboard.writeText((e as Error).stack!)
                     }
-                    const albumTracks = fetchedAlbumData!.tracks.items.map((track: QobuzTrack) => ({
-                        ...track,
-                        album: fetchedAlbumData
-                    })) as QobuzTrack[];
-                    let totalAlbumSize = 0;
-                    const albumUrls = [] as string[];
-                    setStatusBar((prev) => ({ ...prev, description: 'Fetching album size...' }));
-                    let currentDisk = 1;
-                    let trackOffset = 0;
-                    for (const [index, track] of albumTracks.entries()) {
-                        if (track.streamable) {
-                            const { url: trackURL } = await getApiClient().unwrap<{ url: string }>(getApiClient().routes.download, {
-                                params: { track_id: track.id, quality: settings.outputQuality },
-                                country,
-                                signal
-                            });
-                            if (!(currentDisk === track.media_number)) {
-                                trackOffset = albumUrls.length;
-                                currentDisk = track.media_number;
-                                albumUrls.push(trackURL);
-                            } else albumUrls[track.track_number + trackOffset - 1] = trackURL;
-                            const fileSizeResponse = await axios.head(trackURL, { signal });
-                            setStatusBar((statusBar) => ({
-                                ...statusBar,
-                                progress: (100 / albumTracks.length) * (index + 1)
-                            }));
-                            const fileSize = parseInt(fileSizeResponse.headers['content-length']);
-                            totalAlbumSize += fileSize;
-                        }
-                    }
-                    const trackBuffers = [] as Uint8Array[];
-                    let totalBytesDownloaded = 0;
-                    setStatusBar((statusBar) => ({ ...statusBar, progress: 0, description: `Fetching album art...` }));
-                    const albumArtURL = await resizeImage(getFullResImageUrl(fetchedAlbumData!), settings.albumArtSize, settings.albumArtQuality);
-                    const albumArt = albumArtURL ? (await axios.get(albumArtURL, { responseType: 'arraybuffer' })).data : false;
-                    for (const [index, url] of albumUrls.entries()) {
-                        if (url) {
-                            const response = await axios.get(url, {
-                                responseType: 'arraybuffer',
-                                onDownloadProgress: (progressEvent) => {
-                                    if (totalBytesDownloaded + progressEvent.loaded < totalAlbumSize)
-                                        setStatusBar((statusBar) => {
-                                            if (statusBar.processing && !cancelled)
-                                                return {
-                                                    ...statusBar,
-                                                    progress: Math.floor(((totalBytesDownloaded + progressEvent.loaded) / totalAlbumSize) * 100),
-                                                    description: `${formatBytes(totalBytesDownloaded + progressEvent.loaded)} / ${formatBytes(totalAlbumSize)}`
-                                                };
-                                            else return statusBar;
-                                        });
-                                },
-                                signal
-                            });
-                            await new Promise((resolve) => setTimeout(resolve, 100));
-                            totalBytesDownloaded += response.data.byteLength;
-                            const inputFile = response.data;
-                            const reporter = makeReporter(setStatusBar);
-                            let outputFile = await transcodeTrack(inputFile, {
-                                ffmpeg: ffmpegState,
-                                settings,
-                                track: albumTracks[index],
-                                albumArt,
-                                upc: fetchedAlbumData!.upc,
-                                report: reporter
-                            });
-                            if (settings.outputCodec === 'FLAC' && settings.fixMD5)
-                                outputFile = new Uint8Array(await fixMD5Hash(outputFile, reporter));
-                            trackBuffers[index] = outputFile;
-                        }
-                    }
-                    setStatusBar((statusBar) => ({ ...statusBar, progress: 0, description: `Zipping album...` }));
-                    await new Promise((resolve) => setTimeout(resolve, 500));
-                    const zipFiles = {
-                        'cover.jpg': new Uint8Array(albumArt),
-                        ...trackBuffers.reduce(
-                            (acc, buffer, index) => {
-                                if (buffer) {
-                                    const fileName = `${(index + 1).toString().padStart(Math.max(String(albumTracks.length - 1).length, 2), '0')} ${formatCustomTitle(settings.trackName, albumTracks[index])}.${codecMap[settings.outputCodec].extension}`;
+                });
 
-                                    acc[cleanFileName(fileName)] = new Uint8Array(buffer);
-                                }
-                                return acc;
-                            },
-                            {} as { [key: string]: Uint8Array }
-                        )
-                    } as { [key: string]: Uint8Array };
-                    if (albumArt === false) delete zipFiles['cover.jpg'];
-                    const zippedFile = zipSync(zipFiles, { level: 0 });
-                    const zipBlob = new Blob([zippedFile as BlobPart], { type: 'application/zip' });
-                    setStatusBar((prev) => ({ ...prev, progress: 100 }));
-                    const objectURL = URL.createObjectURL(zipBlob);
-                    saveAs(objectURL, formattedZipTitle + '.zip');
-                    setTimeout(() => {
-                        URL.revokeObjectURL(objectURL);
-                    }, 100);
-                    resolve();
-                } catch (e) {
-                    if (e instanceof AxiosError && e.code === 'ERR_CANCELED') resolve();
-                    else {
-                        toast.error(e instanceof Error ? e.message : 'An unknown error occurred', {
-                            action: {
-                                label: 'Copy Stack',
-                                onClick: () => navigator.clipboard.writeText((e as Error).stack!)
-                            }
-                        });
-
-                        resolve();
-                    }
-                }
-            });
-        }});
-    }
-};
+                resolve();
+            }
+        }
+    });
+}
 
 function proceedDownload(objectURL: string, title: string) {
     saveAs(objectURL, title);
@@ -296,7 +334,7 @@ export async function downloadArtistDiscography(
             artistResults = await fetchMore(type, artistResults);
         }
         for (const release of artistResults.artist.releases[type].items) {
-            await createDownloadJob(release, setStatusBar, ffmpegState, settings, undefined, undefined, country);
+            await download({ target: release, settings, country }, setStatusBar, ffmpegState);
         }
     }
     setArtistResults(artistResults);

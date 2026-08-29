@@ -5,7 +5,7 @@ import { JobQueue } from './queue';
 /**
  * The active queue, registered by StatusBarProvider.
  *
- * `createDownloadJob` is called from five places that receive the status-bar
+ * `download` is called from several places that receive the status-bar
  * setter as a prop, not the queue. Threading the queue through all of them
  * would widen an interface this work is meant to narrow, so the provider
  * registers the instance here instead. The fallback keeps the module usable

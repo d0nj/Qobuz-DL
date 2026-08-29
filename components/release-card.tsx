@@ -5,7 +5,8 @@ import React, { useEffect, useState } from 'react';
 import { AlignJustifyIcon, DotIcon, DownloadIcon, UsersIcon, DiscAlbumIcon } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
-import { createDownloadJob } from '@/lib/download-job';
+import { download } from '@/lib/download-job';
+import { albumCacheOf } from '@/lib/download/request';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import {
     FetchedQobuzAlbum,
@@ -129,14 +130,15 @@ const ReleaseCard = ({
                                         size='icon'
                                         variant='ghost'
                                         onClick={async () => {
-                                            await createDownloadJob(
-                                                result as QobuzTrack,
+                                            await download(
+                                                {
+                                                    target: result as QobuzTrack,
+                                                    settings,
+                                                    country,
+                                                    albumCache: albumCacheOf(fetchedAlbumData, setFetchedAlbumData)
+                                                },
                                                 setStatusBar,
-                                                ffmpegState,
-                                                settings,
-                                                fetchedAlbumData,
-                                                setFetchedAlbumData,
-                                                country
+                                                ffmpegState
                                             );
                                         }}
                                     >
@@ -334,14 +336,10 @@ const ReleaseCard = ({
                                                             size='icon'
                                                             variant='ghost'
                                                             onClick={async () => {
-                                                                await createDownloadJob(
-                                                                    track,
+                                                                await download(
+                                                                    { target: track, settings, country },
                                                                     setStatusBar,
-                                                                    ffmpegState,
-                                                                    settings,
-                                                                    undefined,
-                                                                    undefined,
-                                                                    country
+                                                                    ffmpegState
                                                                 );
                                                                 toast.info(`Added '${formatTitle(track)}' to the queue`);
                                                             }}
