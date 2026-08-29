@@ -71,17 +71,17 @@ const ReleaseCard = ({
             <div className='relative w-full aspect-square group select-none rounded-none overflow-hidden bg-card border border-border/60 transition-colors group-hover:border-primary/40'>
                 <div
                     className={cn(
-                        'w-full z-[3] top-0 left-0 absolute transition-all aspect-square opacity-0 group-hover:opacity-100 focus-within:opacity-100',
+                        'w-full z-[3] top-0 left-0 absolute transition-all aspect-square opacity-100 pointer-events-none pointer-hover:opacity-0 pointer-hover:group-hover:opacity-100 pointer-hover:focus-within:opacity-100',
                         resolvedTheme != 'light'
-                            ? `group-hover:bg-black/55 ${focusCard && 'bg-black/55'}`
-                            : `group-hover:bg-white/35 ${focusCard && 'bg-white/35'}`
+                            ? `pointer-hover:group-hover:bg-black/55 ${focusCard && 'bg-black/55'}`
+                            : `pointer-hover:group-hover:bg-white/35 ${focusCard && 'bg-white/35'}`
                     )}
                     onClick={() => {
                         if (item.isArtist) setOpenArtistDialog(true);
                     }}
                 >
                     <div className='flex flex-col h-full justify-between'>
-                        <div className='space-y-0.5 p-4 flex justify-between relative overflow-x-hidden'>
+                        <div className='space-y-0.5 p-4 flex justify-between relative overflow-x-hidden pointer-events-auto'>
                             <div className='w-full pr-9'>
                                 <p className='text-[11px] truncate font-mono uppercase tracking-[0.14em] text-foreground/90'>
                                     {item.isArtist ? (result as QobuzArtist).albums_count + ' Releases' : album!.genre.name}
@@ -109,11 +109,11 @@ const ReleaseCard = ({
                                 </div>
                             </div>
                             {!item.isArtist && showArtistDialog && (
-                                <div className='absolute top-0 right-0 p-4'>
+                                <div className='absolute top-0 right-0 p-4 pointer-events-auto'>
                                     <Button
                                         size='icon'
                                         variant='ghost'
-                                        className='aspect-square'
+                                        className='aspect-square size-11 touch-manipulation active:scale-95 transition-transform'
                                         onClick={async () => {
                                             setOpenArtistDialog(true);
                                         }}
@@ -124,11 +124,12 @@ const ReleaseCard = ({
                             )}
                         </div>
                         {!item.isArtist && (
-                            <div className='flex items-center justify-between gap-4 p-2'>
+                            <div className='flex items-center justify-between gap-4 p-2 pointer-events-auto'>
                                 {item.isTrack ? (
                                     <Button
                                         size='icon'
                                         variant='ghost'
+                                        className='size-11 touch-manipulation active:scale-95 transition-transform'
                                         onClick={async () => {
                                             await download(
                                                 {
@@ -148,6 +149,7 @@ const ReleaseCard = ({
                                     <DownloadAlbumButton
                                         variant='ghost'
                                         size='icon'
+                                        className='size-11 touch-manipulation active:scale-95 transition-transform'
                                         result={result as QobuzAlbum}
                                         setStatusBar={setStatusBar}
                                         ffmpegState={ffmpegState}
@@ -162,6 +164,7 @@ const ReleaseCard = ({
                                     <Button
                                         size='icon'
                                         variant='ghost'
+                                        className='size-11 touch-manipulation active:scale-95 transition-transform'
                                         onClick={async () => {
                                             setOpenTracklist(!openTracklist);
                                             await getFullAlbumInfo(fetchedAlbumData, setFetchedAlbumData, result as QobuzAlbum, country);
@@ -332,7 +335,7 @@ const ReleaseCard = ({
                                                     {track.streamable && (
                                                         <Button
                                                             title={`Download '${formatTitle(track)}'`}
-                                                            className='md:group-hover:flex md:hidden justify-center aspect-square h-6 w-6 [&_svg]:size-5 hover:bg-transparent'
+                                                            className='flex md:hidden justify-center aspect-square h-11 w-11 [&_svg]:size-5 hover:bg-transparent touch-manipulation active:scale-95 transition-transform'
                                                             size='icon'
                                                             variant='ghost'
                                                             onClick={async () => {
