@@ -45,21 +45,20 @@ export const StatusBarProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
             if (pendingReset.current) return;
 
+            // A new job enqueued before the hold expires clears the timer
+            // above, so reaching here means no job is running or pending and
+            // the bar is safe to retreat regardless of how the last job ended.
             pendingReset.current = setTimeout(() => {
                 pendingReset.current = null;
-                setStatusBar((prev) =>
-                    prev.processing
-                        ? {
-                              ...prev,
-                              open: false,
-                              title: '',
-                              description: '',
-                              progress: 0,
-                              processing: false,
-                              complete: false
-                          }
-                        : prev
-                );
+                setStatusBar((prev) => ({
+                    ...prev,
+                    open: false,
+                    title: '',
+                    description: '',
+                    progress: 0,
+                    processing: false,
+                    complete: false
+                }));
             }, COMPLETION_HOLD_MS);
         });
 
