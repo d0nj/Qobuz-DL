@@ -1,12 +1,9 @@
 import { z } from 'zod';
 
 /**
- * Settings schema.
- *
- * This is the single declaration of what a valid Settings object is. The
- * TypeScript type is derived from it (see below), so the type and the runtime
- * validator cannot drift apart — which is exactly what went wrong with the
- * hand-rolled `isValidSettings` this replaced.
+ * The TypeScript type is derived from this schema, so the type and the runtime
+ * validator cannot drift — which is what went wrong with the hand-rolled
+ * `isValidSettings` this replaced.
  */
 
 export const outputQualityValues = ['27', '7', '6', '5'] as const;
@@ -32,17 +29,12 @@ export const settingsSchema = z.object({
     explicitContent: z.boolean(),
 
     /**
-     * Fetch lyrics from LRCLIB and write them into the file's tags.
+     * Fetch lyrics from LRCLIB into the file's tags. Off by default: one
+     * request per track against a third-party service.
      *
-     * Off by default: it is a network call per track against a third-party
-     * service, so it must be opt-in rather than something every download pays
-     * for. A miss never fails the download.
-     *
-     * These carry `.default(...)` while the older booleans above do not,
-     * because settings already persisted in localStorage predate them. A
-     * strict `z.boolean()` rejects a missing key, which would fail
-     * `parseSettings` for every returning user and silently reset their whole
-     * configuration. New fields default; they are never required.
+     * `.default(...)` is required, not stylistic — settings already persisted
+     * predate this key, and a strict `z.boolean()` would reject them, fail
+     * `parseSettings`, and reset every returning user's configuration.
      */
     fetchLyrics: z.boolean().default(false),
 
@@ -75,12 +67,8 @@ export const defaultSettings: SettingsProps = {
 };
 
 /**
- * Validate an unknown value as Settings.
- *
- * Returns the parsed (and coerced) settings on success, or `null` on failure.
- * Never throws: callers use this to decide whether persisted data is usable,
- * and unparseable persisted data must degrade to defaults rather than crash
- * the app on first paint.
+ * Never throws: unparseable persisted data must degrade to defaults rather than
+ * crash the app on first paint.
  */
 export function parseSettings(value: unknown): SettingsProps | null {
     const result = settingsSchema.safeParse(value);
