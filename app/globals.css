@@ -219,13 +219,9 @@
 }
 
 /*
- * Grain is the one element that should never sit still: static noise reads as
- * a texture, not as film. The tile steps through a few offsets rather than
- * moving continuously — real grain re-randomises per frame, and a smooth slide
- * would read as a scrolling texture instead.
- *
- * Only `transform` animates, on a fixed, pointer-events-none layer, so it never
- * triggers layout or paint.
+ * Static noise reads as a texture, not as film. Stepping rather than sliding:
+ * real grain re-randomises per frame, and a smooth slide reads as a scrolling
+ * texture. Only `transform` animates, so no layout or paint.
  */
 @keyframes grain-drift {
     0% {
@@ -312,11 +308,9 @@
 }
 
 /*
- * The download bar's fill duration lives in a custom property so the
- * reduced-motion path can zero it without duplicating the easing. The
- * reduced-motion rule repeats at each specificity level, because
- * `[data-resetting]` otherwise outranks `:root` and a reset would still
- * animate for users who asked for none.
+ * A custom property so reduced-motion can zero it without duplicating the
+ * easing. The rule repeats at each specificity level: `[data-resetting]`
+ * otherwise outranks `:root` and resets would still animate.
  */
 :root {
     --progress-fill-duration: 420ms;

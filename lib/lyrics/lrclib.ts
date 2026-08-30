@@ -1,20 +1,16 @@
 import { z } from 'zod';
 
-/**
- * Lyrics lookup against LRCLIB.
- *
- * The API is a plain GET with no key. A miss is a 404, which is a normal
- * outcome rather than an error: most tracks simply are not in the database,
- * and a download must not fail because lyrics could not be found.
- */
-
+/** Lyrics lookup against LRCLIB. A miss is a 404, which is a normal outcome. */
 const LRCLIB_ENDPOINT = 'https://lrclib.net/api/get';
 
 /**
- * LRCLIB asks callers to send a identifying User-Agent; requests without one
- * may be rejected.
+ * Must be `X-User-Agent`. `User-Agent` is a forbidden header, so setting it
+ * makes the request preflighted — and lrclib's `access-control-allow-headers`
+ * is `content-type, x-user-agent, lrclib-client`, which does not list it. The
+ * preflight is then rejected and the request never leaves. curl hides this
+ * entirely because it performs no preflight.
  */
-const USER_AGENT = 'Qobuz-DL/1.0 (https://github.com/renzynx/Qobuz-DL)';
+const CLIENT_HEADER = 'Qobuz-DL/1.0 (https://github.com/renzynx/Qobuz-DL)';
 
 const lyricsSchema = z.object({
     plainLyrics: z.string().nullish(),
@@ -54,17 +50,14 @@ function buildUrl(query: LyricsQuery): string {
 }
 
 /**
- * Resolve lyrics for one track.
- *
- * Returns `null` for anything other than a usable result — missing, malformed,
- * offline, aborted. Every caller must be able to proceed without lyrics, so a
- * lookup failure is never an exception.
+ * `null` on any failure — missing, malformed, offline, aborted. Callers must be
+ * able to finish a download without lyrics, so a lookup failure is never thrown.
  */
 async function fetchLyrics(query: LyricsQuery, signal?: AbortSignal): Promise<Lyrics | null> {
     if (!query.artist.trim() || !query.title.trim()) return null;
 
     const response = await fetch(buildUrl(query), {
-        headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+        headers: { 'X-User-Agent': CLIENT_HEADER, Accept: 'application/json' },
         ...(signal ? { signal } : {})
     });
 
