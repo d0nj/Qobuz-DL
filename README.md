@@ -1,7 +1,5 @@
 # Qobuz-DL
 
-![Qobuz-DL](https://github.com/user-attachments/assets/45896382-1764-4339-824a-b31f32991480)
-
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FQobuzDL%2FQobuz-DL&env=QOBUZ_API_BASE,QOBUZ_APP_ID,QOBUZ_SECRET,QOBUZ_AUTH_TOKENS&envDescription=Qobuz%20API%20credentials%20%E2%80%94%20see%20below&envLink=https%3A%2F%2Fgithub.com%2FQobuzDL%2FQobuz-AppID-Secret-Tool)
 
 ---
@@ -45,7 +43,7 @@ Optional:
 > [!NOTE]
 > To download tracks longer than 30 seconds you need a **valid Qobuz user auth token** from a paying membership. Find it under the `localuser.token` key in localStorage on [play.qobuz.com](https://play.qobuz.com/) while signed in, and put it in `QOBUZ_AUTH_TOKENS`.
 
-See [`.env.vercel.example`](.env.vercel.example) for a copy-pasteable set.
+See [`.env.example`](.env.example) for a copy-pasteable set.
 
 ## Table of Contents
 

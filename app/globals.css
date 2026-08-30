@@ -202,17 +202,53 @@
 /* Film-grain background field: tiled noise, screen-blended so it lifts the void */
 .grain-field {
     position: fixed;
-    inset: 0;
+    /* Oversized so the drift never exposes an edge. */
+    inset: -120px;
     z-index: 0;
     pointer-events: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
     background-size: 240px 240px;
     opacity: 0.34;
     mix-blend-mode: screen;
+    animation: grain-drift 720ms steps(1, end) infinite;
+    will-change: transform;
 }
 
 .dark .grain-field {
     opacity: 0.45;
+}
+
+/*
+ * Grain is the one element that should never sit still: static noise reads as
+ * a texture, not as film. The tile steps through a few offsets rather than
+ * moving continuously — real grain re-randomises per frame, and a smooth slide
+ * would read as a scrolling texture instead.
+ *
+ * Only `transform` animates, on a fixed, pointer-events-none layer, so it never
+ * triggers layout or paint.
+ */
+@keyframes grain-drift {
+    0% {
+        transform: translate3d(0, 0, 0);
+    }
+    25% {
+        transform: translate3d(-8px, 6px, 0);
+    }
+    50% {
+        transform: translate3d(6px, -8px, 0);
+    }
+    75% {
+        transform: translate3d(-6px, -6px, 0);
+    }
+    100% {
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .grain-field {
+        animation: none;
+    }
 }
 
 /* Off-centre result rail */

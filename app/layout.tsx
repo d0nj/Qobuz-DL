@@ -1,3 +1,4 @@
+import GrainField from '@/components/grain-field';
 import MotionProvider from '@/components/motion-provider';
 import StatusBarContainer from '@/components/status-bar/container';
 import { ThemeProvider } from '@/components/theme-provider';
@@ -67,7 +68,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                             <StatusBarProvider>
                                 <SettingsProvider>
                                     <ThemeProvider attribute='class' defaultTheme='dark' enableSystem>
-                                        <div className='grain-field' aria-hidden='true' />
+                                        <GrainField />
                                         <div className='fixed justify-between items-start flex w-full max-w-screen p-4 z-[10]'>
                                             <div className='flex flex-col gap-2'>
                                                 <SettingsForm />
