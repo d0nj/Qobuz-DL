@@ -1,12 +1,8 @@
 import { LucideIcon } from 'lucide-react';
 
 /**
- * Queue and status-bar types.
- *
- * These live in `lib/` rather than in the component that renders them. When
- * they were declared in `components/status-bar/status-bar.tsx`, four files
- * under `lib/` imported from `components/`, which meant importing queue logic
- * dragged in Radix, motion/react and next/image.
+ * Lives in `lib/` so importing queue logic does not transitively pull in the
+ * renderer's dependencies — Radix, motion/react and next/image.
  */
 export type QueueProps = {
     title: string;

@@ -2,16 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { defaultSettings, isValidSettings, parseSettings, settingsSchema } from '@/lib/settings-schema';
 
 /**
- * These cases exist because of a real defect.
- *
- * The previous validator was a hand-rolled 17-line boolean expression whose
- * final `&&` was written as a comma. The comma operator has the lowest
- * precedence, so the entire chain was evaluated and discarded, and the
- * function returned only `typeof zipName === 'string' && typeof trackName ===
- * 'string'`. Every codec, quality, bitrate and size check was dead code.
- *
- * `regressionCases` are the inputs that passed that broken validator. If the
- * schema is ever weakened again, these fail.
+ * Inputs a weak validator must still reject: a comma in place of `&&` once
+ * made every codec, quality and bitrate check dead code. If the schema is
+ * weakened again, these fail.
  */
 const regressionCases: Array<{ name: string; value: unknown }> = [
     { name: 'bogus outputCodec', value: { ...defaultSettings, outputCodec: 'WMA' } },

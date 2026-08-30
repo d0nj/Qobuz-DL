@@ -2,8 +2,7 @@ import { z } from 'zod';
 
 /**
  * The TypeScript type is derived from this schema, so the type and the runtime
- * validator cannot drift — which is what went wrong with the hand-rolled
- * `isValidSettings` this replaced.
+ * validator cannot drift. Deriving the type by hand reopens that gap.
  */
 
 export const outputQualityValues = ['27', '7', '6', '5'] as const;

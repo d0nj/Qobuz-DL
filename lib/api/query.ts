@@ -1,10 +1,9 @@
 /**
  * Query-string encoding for `/api/*` calls.
  *
- * The client used to build URLs by interpolation (`?q=${query}&offset=0`), so a
- * query containing `&`, `#`, `+` or a non-ASCII character corrupted the request
- * — `tom & jerry` arrived as `q=tom ` with a stray `jerry` parameter. `URLSearchParams`
- * applies form encoding, which is what `URLSearchParams`-based server parsing expects.
+ * `URLSearchParams` is required, not interpolation: `?q=${query}` corrupts any
+ * query containing `&`, `#`, `+` or non-ASCII characters — `tom & jerry`
+ * arrives as `q=tom ` with a stray `jerry` parameter.
  *
  * Deliberately free of React and Next imports so both the client transport and
  * the tests can use it.
