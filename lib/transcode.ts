@@ -1,3 +1,4 @@
+import { escapeMetadataValue } from './lyrics/lrclib';
 import { formatArtists, formatTitle, getAlbum, QobuzTrack } from './qobuz-dl';
 import { SettingsProps } from './settings-schema';
 
@@ -67,8 +68,12 @@ export function buildTranscodeArgs(settings: SettingsProps, inputName: string, o
  *
  * Optional fields are appended conditionally rather than written as empty
  * values, so a missing ISRC never produces a blank `isrc=` line.
+ *
+ * `lyrics` is escaped: a raw newline ends the entry, so unescaped lyrics
+ * truncate at the first line. Verified against ffmpeg — see
+ * `escapeMetadataValue` in lib/lyrics/lrclib.ts.
  */
-export function buildMetadataText(track: QobuzTrack, upc?: string): string {
+export function buildMetadataText(track: QobuzTrack, upc?: string, lyrics?: { plain: string; synced?: string | null } | null): string {
     const album = getAlbum(track);
     if (!album) return [';FFMETADATA1', `title=${formatTitle(track)}`].join('\n');
 
@@ -92,6 +97,12 @@ export function buildMetadataText(track: QobuzTrack, upc?: string): string {
     if (track.isrc) lines.push(`isrc=${track.isrc}`);
     if (upc) lines.push(`barcode=${upc}`);
     if (track.track_number) lines.push(`track=${track.track_number}`);
+
+    // `lyrics` is the unsynchronised text. `synced-lyrics` carries LRC
+    // timestamps and is what Apple Music, Poweramp and foobar2000 read for
+    // karaoke-style display; it is written only when LRCLIB has it.
+    if (lyrics?.plain) lines.push(`lyrics=${escapeMetadataValue(lyrics.plain)}`);
+    if (lyrics?.synced) lines.push(`synced-lyrics=${escapeMetadataValue(lyrics.synced)}`);
 
     return lines.join('\n');
 }

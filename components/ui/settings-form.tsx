@@ -272,6 +272,37 @@ const SettingsForm = () => {
                     <SheetHeader>
                         <div className='flex items-center gap-2'>
                             <div className='flex flex-col'>
+                                <p className='font-medium'>Fetch lyrics</p>
+                                <p className='text-xs text-muted-foreground'>
+                                    Look up lyrics from LRCLIB and write them into the file. Songs without an entry are downloaded as normal.
+                                </p>
+                            </div>
+                            <Checkbox
+                                checked={settings.fetchLyrics && settings.applyMetadata && settings.outputCodec !== 'WAV'}
+                                disabled={!settings.applyMetadata || settings.outputCodec === 'WAV'}
+                                onCheckedChange={(checked: boolean) => setSettings((settings) => ({ ...settings, fetchLyrics: checked }))}
+                            />
+                        </div>
+                        {settings.fetchLyrics && settings.applyMetadata && settings.outputCodec !== 'WAV' && (
+                            <div className='flex items-center gap-2'>
+                                <div className='flex flex-col'>
+                                    <p className='font-medium'>Prefer synced lyrics</p>
+                                    <p className='text-xs text-muted-foreground'>
+                                        Write time-stamped LRC lyrics when available, so players can highlight the line as it is sung. Plain text is
+                                        always written too.
+                                    </p>
+                                </div>
+                                <Checkbox
+                                    checked={settings.preferSyncedLyrics}
+                                    onCheckedChange={(checked: boolean) => setSettings((settings) => ({ ...settings, preferSyncedLyrics: checked }))}
+                                />
+                            </div>
+                        )}
+                    </SheetHeader>
+                    <Separator />
+                    <SheetHeader>
+                        <div className='flex items-center gap-2'>
+                            <div className='flex flex-col'>
                                 <p className='font-medium'>Fix MD5 Hash</p>
                                 <p className='text-xs text-muted-foreground'>
                                     If enabled (default), MD5 hashes will be fixed, improving compatiablity with old software. This will take longer to

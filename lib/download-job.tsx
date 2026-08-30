@@ -1,12 +1,24 @@
 import axios, { AxiosError } from 'axios';
 import saveAs from 'file-saver';
 import { FFmpegType, fixMD5Hash, loadFFmpeg, ProgressReporter, transcodeTrack } from './ffmpeg-functions';
+import { lrclib } from './lyrics/lrclib';
 import { codecMap, needsEncoder } from './transcode';
 import { cleanFileName, formatBytes, formatCustomTitle, resizeImage } from './utils';
 import { createJob, getActiveQueue } from './status-bar/jobs';
 import { AlbumCache, DownloadRequest } from './download/request';
 import { Disc3Icon, DiscAlbumIcon, LucideIcon } from 'lucide-react';
-import { artistReleaseCategories, FetchedQobuzAlbum, formatTitle, getFullResImageUrl, isTrack, QobuzAlbum, QobuzArtistResults, QobuzTrack } from './qobuz-dl';
+import {
+    artistReleaseCategories,
+    FetchedQobuzAlbum,
+    formatArtists,
+    formatTitle,
+    getAlbum,
+    getFullResImageUrl,
+    isTrack,
+    QobuzAlbum,
+    QobuzArtistResults,
+    QobuzTrack
+} from './qobuz-dl';
 import { SettingsProps } from './settings-provider';
 import { getApiClient } from '@/lib/api/client';
 import { StatusBarProps } from './status-bar/types';
@@ -29,6 +41,36 @@ function makeReporter(setStatusBar: React.Dispatch<React.SetStateAction<StatusBa
  * The deep entry point: one request object, one place where cancellation,
  * progress and error handling live.
  */
+/**
+ * Resolve lyrics for one track, if the user asked for them.
+ *
+ * Returns null on every failure path — missing, offline, aborted — because a
+ * download must never fail over lyrics. The `report` call is the only user
+ * feedback; a miss is not worth an error toast.
+ */
+async function lookupLyrics(
+    track: QobuzTrack,
+    settings: SettingsProps,
+    report: (description: string, progress?: number) => void,
+    signal?: AbortSignal
+): Promise<{ plain: string; synced?: string | null } | null> {
+    if (!settings.fetchLyrics || !settings.applyMetadata) return null;
+
+    report('Fetching lyrics...');
+    const result = await lrclib.fetchLyrics(
+        {
+            artist: formatArtists(track),
+            title: formatTitle(track),
+            album: getAlbum(track)?.title,
+            duration: track.duration
+        },
+        signal
+    );
+
+    if (!result) return null;
+    return { plain: result.plain, synced: settings.preferSyncedLyrics ? result.synced : null };
+}
+
 /** Queues one download job under the active queue. */
 function enqueueDownload(
     setStatusBar: React.Dispatch<React.SetStateAction<StatusBarProps>>,
@@ -107,10 +149,12 @@ async function runTrackDownload(
             setStatusBar((prev) => ({ ...prev, description: `Applying metadata...`, progress: 100, complete: true }));
             const inputFile = response.data;
             const report = makeReporter(setStatusBar);
+            const lyrics = await lookupLyrics(result as QobuzTrack, settings, report, signal);
             let outputFile = await transcodeTrack(inputFile, {
                 ffmpeg: ffmpegState,
                 settings,
                 track: result as QobuzTrack,
+                lyrics,
                 report
             });
             if (settings.outputCodec === 'FLAC' && settings.fixMD5) outputFile = new Uint8Array(await fixMD5Hash(outputFile, report));
@@ -253,9 +297,11 @@ async function runAlbumDownload(
                     totalBytesDownloaded += response.data.byteLength;
                     const inputFile = response.data;
                     const reporter = makeReporter(setStatusBar);
+                    const lyrics = await lookupLyrics(albumTracks[index], settings, reporter, signal);
                     let outputFile = await transcodeTrack(inputFile, {
                         ffmpeg: ffmpegState,
                         settings,
+                        lyrics,
                         track: albumTracks[index],
                         albumArt,
                         upc: fetchedAlbumData!.upc,

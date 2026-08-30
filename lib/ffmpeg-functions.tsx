@@ -28,6 +28,8 @@ export type TranscodeOptions = {
     track: Parameters<typeof buildMetadataText>[0];
     albumArt?: ArrayBuffer | false;
     upc?: string;
+    /** `null` means "looked up, nothing found" — distinct from omitted. */
+    lyrics?: { plain: string; synced?: string | null } | null;
     report?: ProgressReporter;
 };
 
@@ -50,7 +52,7 @@ async function fetchAlbumArt(track: TranscodeOptions['track'], settings: Setting
  */
 export async function transcodeTrack(
     buffer: ArrayBuffer | Uint8Array,
-    { ffmpeg, settings, track, albumArt, upc, report }: TranscodeOptions
+    { ffmpeg, settings, track, albumArt, upc, lyrics, report }: TranscodeOptions
 ): Promise<Uint8Array> {
     const skipReencode = isSourceUsableAsIs(settings);
     if (skipReencode && !settings.applyMetadata) return toBytes(buffer);
@@ -75,7 +77,7 @@ export async function transcodeTrack(
     if (!settings.applyMetadata || settings.outputCodec === 'WAV') return working;
 
     report?.('Applying metadata...');
-    working = await writeMetadata(ffmpeg, settings, track, working, names, extension, upc);
+    working = await writeMetadata(ffmpeg, settings, track, working, names, extension, upc, lyrics);
 
     if (settings.outputCodec === 'OPUS' || albumArt === false) return working;
 
@@ -108,9 +110,10 @@ async function writeMetadata(
     input: Uint8Array,
     names: ReturnType<typeof jobFileNames>,
     extension: string,
-    upc?: string
+    upc?: string,
+    lyrics?: { plain: string; synced?: string | null } | null
 ): Promise<Uint8Array> {
-    const metadata = buildMetadataText(track, upc);
+    const metadata = buildMetadataText(track, upc, lyrics);
     await ffmpeg.FS('writeFile', names.tagged, input);
     await ffmpeg.FS('writeFile', names.metadata, new TextEncoder().encode(metadata));
     await ffmpeg.run('-i', names.tagged, '-i', names.metadata, '-map_metadata', '1', '-codec', 'copy', names.output);

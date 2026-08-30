@@ -30,6 +30,24 @@ export const settingsSchema = z.object({
     applyMetadata: z.boolean(),
     fixMD5: z.boolean(),
     explicitContent: z.boolean(),
+
+    /**
+     * Fetch lyrics from LRCLIB and write them into the file's tags.
+     *
+     * Off by default: it is a network call per track against a third-party
+     * service, so it must be opt-in rather than something every download pays
+     * for. A miss never fails the download.
+     *
+     * These carry `.default(...)` while the older booleans above do not,
+     * because settings already persisted in localStorage predate them. A
+     * strict `z.boolean()` rejects a missing key, which would fail
+     * `parseSettings` for every returning user and silently reset their whole
+     * configuration. New fields default; they are never required.
+     */
+    fetchLyrics: z.boolean().default(false),
+
+    /** Prefer time-synced LRC lyrics when LRCLIB has them. */
+    preferSyncedLyrics: z.boolean().default(true),
     albumArtSize: z.number().int().min(100).max(3600),
     albumArtQuality: z.number().min(0.1).max(1),
     zipName: z.string(),
@@ -48,6 +66,8 @@ export const defaultSettings: SettingsProps = {
     applyMetadata: true,
     fixMD5: false,
     explicitContent: true,
+    fetchLyrics: false,
+    preferSyncedLyrics: true,
     albumArtSize: 3600,
     albumArtQuality: 1,
     zipName: '{artists} - {name}',
