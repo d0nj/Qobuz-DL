@@ -110,8 +110,7 @@ export function writePersisted<T>(config: PersistedConfigModule<T>, value: T): v
  * Deep module: persisted config.
  *
  * The interface is small — a value, a setter, a reset — and behind it lives
- * the whole read/validate/write/migrate rhythm. Callers no longer re-implement
- * "read localStorage once on mount, then write on every change", which is the
+ * the whole read/validate/write/migrate rhythm.ount, then write on every change", which is the
  * duplicated dance this replaces (and which raced with itself: the post-mount
  * read effect landed after the write effect had already persisted defaults).
  */

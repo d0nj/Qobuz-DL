@@ -14,14 +14,11 @@ export type QueueSnapshot = {
 };
 
 /**
- * Serial job queue.
+ * Serial job queue. Progression is driven by promise completion, so there is no
+ * interval to drift and no tick to miss.
  *
- * Replaces a module-level `let jobs = []` advanced by a 100ms `setInterval`
- * that compared against a shifting array. Progression is driven by promise
- * completion, so there is no polling and no tick to miss.
- *
- * State is owned here rather than in React: the previous code read React state
- * back out through `setStatusBar(prev => (resolve(prev), prev))`, a side effect
+ * State is owned here, not in React: reading React state back out through
+ * `setStatusBar(prev => (resolve(prev), prev))` is a side effect
  * inside a reducer that broke under StrictMode double-invocation.
  *
  * The queue is an instance, not a module global, so a second mount starts
@@ -54,10 +51,7 @@ export class JobQueue {
         };
     }
 
-    /**
-     * Queue a job. It runs now if nothing is running, otherwise after the
-     * current job settles — whatever that job does.
-     */
+        /** Runs immediately when idle, otherwise once the current job settles. */
     enqueue(run: () => Promise<void>): Job {
         const job: Job = { UUID: uuidv4(), run };
         this.pending.push(job);

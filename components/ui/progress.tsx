@@ -6,15 +6,13 @@ import * as ProgressPrimitive from '@radix-ui/react-progress';
 import { cn } from '@/lib/utils';
 
 /**
- * The download bar is the one element whose whole job is continuity: it
- * reports bytes arriving over minutes. The previous indicator carried
- * `transition-all` with no duration, so it jumped between update ticks —
- * the transition was declared but never given a time to run.
+ * The one element whose whole job is continuity: it reports bytes arriving over
+ * minutes, so it needs a real transition with a duration.
  *
- * Two directions, two durations. Filling is a measurement settling, so it
- * eases slowly; a jump backwards is the next job starting, not progress
- * reversing, so it snaps. Duration comes from a custom property so
- * `prefers-reduced-motion` can zero it without a JS media query.
+ * Two directions, two durations. Filling is a measurement settling, so it eases
+ * slowly; a jump backwards is the next job starting, not progress reversing, so
+ * it snaps. Duration is a custom property so `prefers-reduced-motion` can zero
+ * it without a JS media query.
  */
 const Progress = React.forwardRef<React.ElementRef<typeof ProgressPrimitive.Root>, React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>>(
     ({ className, value, ...props }, ref) => {

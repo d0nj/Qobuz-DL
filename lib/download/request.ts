@@ -9,15 +9,10 @@ export type AlbumCache = {
 /**
  * Everything a download needs, as one value.
  *
- * `createDownloadJob` took seven positional parameters, four of which were
- * ambient context that every caller had to reassemble from hooks. Worse, two
- * of them — `fetchedAlbumData` and `setFetchedAlbumData` — are not two options
- * but one cache with its invalidation callback, and they had to be passed as a
- * matched pair or omitted together. Encoding the mode in two nulled positional
- * slots (`undefined, undefined`) is how callers asked for "track, don't reuse
- * album data".
- *
- * Grouping them makes the pairing structural and the mode explicit.
+ * The album cache and its invalidation callback are one unit, not two
+ * independent options: they must be passed together or not at all, and
+ * `undefined, undefined` is how a caller says "track, don't reuse album data".
+ * The object makes that pairing structural instead of positional.
  */
 export type DownloadRequest = {
     target: QobuzAlbum | QobuzTrack;
