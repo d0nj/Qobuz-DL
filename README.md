@@ -45,7 +45,7 @@ Optional:
 > [!NOTE]
 > To download tracks longer than 30 seconds you need a **valid Qobuz user auth token** from a paying membership. Find it under the `localuser.token` key in localStorage on [play.qobuz.com](https://play.qobuz.com/) while signed in, and put it in `QOBUZ_AUTH_TOKENS`.
 
-See [`.env.vercel.example`](.env.vercel.example) for a copy-pasteable set.
+See [`.env.example`](.env.example) for a copy-pasteable set.
 
 ## Table of Contents
 
