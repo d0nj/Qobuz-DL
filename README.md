@@ -1,6 +1,6 @@
 # Qobuz-DL
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FQobuzDL%2FQobuz-DL&env=QOBUZ_API_BASE,QOBUZ_APP_ID,QOBUZ_SECRET,QOBUZ_AUTH_TOKENS&envDescription=Qobuz%20API%20credentials%20%E2%80%94%20see%20below&envLink=https%3A%2F%2Fgithub.com%2FQobuzDL%2FQobuz-AppID-Secret-Tool)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frenzynx%2FQobuz-DL&env=QOBUZ_API_BASE,QOBUZ_APP_ID,QOBUZ_SECRET,QOBUZ_AUTH_TOKENS&envDescription=Qobuz%20API%20credentials%20%E2%80%94%20see%20below&envLink=https%3A%2F%2Fgithub.com%2FQobuzDL%2FQobuz-AppID-Secret-Tool)
 
 ---
 
@@ -14,6 +14,7 @@ Qobuz-DL provides a fast and easy way to download music using Qobuz in a variety
 - Download any song or album from Qobuz.
 - Re-encode audio provided by Qobuz to a variety of different lossless and lossy codecs using FFmpeg.
 - Apply metadata to downloaded songs.
+- Optionally embed lyrics fetched from [LRCLIB](https://lrclib.net), including time-synced LRC.
 - Search the catalogue by album, track, or artist, with country-aware availability.
 - Bulk-download an artist's discography, with ZIP or individual-file output.
 
@@ -52,6 +53,8 @@ See [`.env.example`](.env.example) for a copy-pasteable set.
 - [Getting your Qobuz credentials](#getting-your-qobuz-credentials)
 - [Docker](#docker)
 - [Development](#development)
+  - [Country tokens](#country-tokens)
+  - [Lyrics](#lyrics)
 - [Architecture](#architecture)
 - [Contributing](#contributing)
 - [License](#license)
@@ -67,7 +70,7 @@ node -v
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/QobuzDL/Qobuz-DL.git
+git clone https://github.com/renzynx/Qobuz-DL.git
 ```
 
 ### 2. Navigate to the project directory
@@ -152,6 +155,25 @@ export const tokenCountriesMap: TokenCountry[] = [
 ```
 
 When this list is non-empty it takes precedence over `QOBUZ_AUTH_TOKENS`, and the UI exposes a country picker.
+
+### Lyrics
+
+Lyrics are fetched from [LRCLIB](https://lrclib.net), a free and open lyrics
+database. Enable **Fetch lyrics** in Settings → Output Settings.
+
+- **Off by default.** Each track costs one request to a third-party service, so
+  it is opt-in rather than something every download pays for.
+- **A miss never fails a download.** Most tracks have no entry; the file is
+  written without lyrics and the download completes.
+- **Synced lyrics** — when LRCLIB has timed LRC text and *Prefer synced lyrics*
+  is on, it is written to `synced-lyrics` alongside the plain text in `lyrics`.
+  Players that support it (Apple Music, Poweramp, foobar2000) highlight the line
+  as it is sung.
+- **Requires metadata to be enabled, and is unavailable for WAV**, which carries
+  no tags at all. The setting is disabled in that case.
+
+Lyrics are written as standard tags, so no additional tooling is needed to read
+them.
 
 ## Architecture
 
