@@ -21,17 +21,15 @@ export const codecMap = {
 const LOSSY_QUALITY: OutputQuality = '5';
 
 /**
- * Whether a downloaded file already matches what the user asked for.
+ * Single source of truth for "do we need an encoder?".
  *
- * This is the single source of truth for "do we need an encoder?" The decision
- * used to live in three places, and the caller's copy disagreed with the
- * callee's: the caller tested `outputQuality === '27'` while the module tested
- * `outputQuality !== '5'`. At FLAC quality 6 or 7 with metadata off, that split
- * made the caller load a ~30MB ffmpeg.wasm blob which the callee then declined
- * to use — 30MB downloaded, nothing done.
+ * This decision used to be duplicated in three places, and the caller's copy
+ * disagreed: it tested `outputQuality === '27'` while this tests `!== '5'`. At
+ * FLAC quality 6 or 7 with metadata off, that loaded a ~30MB ffmpeg.wasm blob
+ * which was then never used.
  *
- * The tier, not the top tier, is what matters: any lossless source requested
- * as FLAC is already correct, regardless of which lossless tier it came from.
+ * The tier, not the top tier, is what matters: any lossless source requested as
+ * FLAC is already correct, whichever lossless tier it came from.
  */
 export function isSourceUsableAsIs(settings: SettingsProps): boolean {
     return settings.outputQuality !== LOSSY_QUALITY && settings.outputCodec === 'FLAC';
@@ -42,11 +40,8 @@ export function needsEncoder(settings: SettingsProps): boolean {
 }
 
 /**
- * FFmpeg argv for one transcode.
- *
- * Built as a filtered array because the previous `cond ? arg : ''` form passed
- * literal empty strings to ffmpeg whenever bitrate was unset — which is every
- * lossless encode.
+ * Filtered array rather than `cond ? arg : ''`, which passed literal empty
+ * strings to ffmpeg whenever bitrate was unset — i.e. every lossless encode.
  */
 export function buildTranscodeArgs(settings: SettingsProps, inputName: string, outputName: string): string[] {
     const extension = codecMap[settings.outputCodec].extension;
@@ -64,14 +59,11 @@ export function buildTranscodeArgs(settings: SettingsProps, inputName: string, o
 }
 
 /**
- * FFMETADATA1 block for one track.
+ * Optional fields are appended conditionally, so a missing ISRC never produces
+ * a blank `isrc=` line.
  *
- * Optional fields are appended conditionally rather than written as empty
- * values, so a missing ISRC never produces a blank `isrc=` line.
- *
- * `lyrics` is escaped: a raw newline ends the entry, so unescaped lyrics
- * truncate at the first line. Verified against ffmpeg — see
- * `escapeMetadataValue` in lib/lyrics/lrclib.ts.
+ * Lyrics are escaped: a raw newline ends the entry, so unescaped lyrics truncate
+ * at the first line. Verified against ffmpeg 7.1 — see `escapeMetadataValue`.
  */
 export function buildMetadataText(track: QobuzTrack, upc?: string, lyrics?: { plain: string; synced?: string | null } | null): string {
     const album = getAlbum(track);
@@ -107,14 +99,7 @@ export function buildMetadataText(track: QobuzTrack, upc?: string, lyrics?: { pl
     return lines.join('\n');
 }
 
-/**
- * Unique names per job.
- *
- * applyMetadata writes into one shared ffmpeg filesystem, so two concurrent
- * jobs using fixed filenames would overwrite each other's inputs. The old code
- * was safe only because the download queue serialises — a guarantee declared
- * in a different module.
- */
+/** Unique per job: metadata is written into one shared ffmpeg filesystem. */
 export function jobFileNames(jobId: string, inputExtension: string, outputExtension: string) {
     return {
         input: `input-${jobId}.${inputExtension}`,

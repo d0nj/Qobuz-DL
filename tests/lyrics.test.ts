@@ -28,11 +28,27 @@ describe('lrclib lookup', () => {
         expect(url.searchParams.get('duration')).toBe('239');
     });
 
-    it('identifies itself with a User-Agent', async () => {
+    it('identifies itself with X-User-Agent, not User-Agent', async () => {
+        // `User-Agent` is a forbidden header. Setting it from the browser makes
+        // the request preflighted, and lrclib's allow-list is
+        // `content-type, x-user-agent, lrclib-client` — so the preflight is
+        // rejected and the request never leaves. This regressed once already.
         const spy = stubFetch({ ok: true, json: async () => ({ plainLyrics: 'x' }) });
         await lrclib.fetchLyrics(query);
         const headers = spy.mock.calls[0][1]?.headers as Record<string, string>;
-        expect(headers['User-Agent']).toBeTruthy();
+
+        expect(headers['X-User-Agent']).toBeTruthy();
+        expect(headers['User-Agent']).toBeUndefined();
+    });
+
+    it('sends only simple headers so no preflight is triggered', async () => {
+        // Any header outside the CORS-safelisted set forces an OPTIONS
+        // preflight. Accept and X-User-Agent are both allowed by lrclib.
+        const spy = stubFetch({ ok: true, json: async () => ({ plainLyrics: 'x' }) });
+        await lrclib.fetchLyrics(query);
+        const headers = spy.mock.calls[0][1]?.headers as Record<string, string>;
+
+        expect(Object.keys(headers).sort()).toEqual(['Accept', 'X-User-Agent']);
     });
 
     it('returns plain and synced lyrics when both are present', async () => {
