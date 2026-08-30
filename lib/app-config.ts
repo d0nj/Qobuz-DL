@@ -1,16 +1,10 @@
 /**
  * Application branding, resolved once.
  *
- * `NEXT_PUBLIC_APPLICATION_NAME` is optional, but every one of its call sites
- * previously used `!` and called `.toLowerCase()` on it directly. With the
- * variable unset — a fresh clone, a Vercel project before its env vars are
- * added, a Docker build without `--build-arg` — that threw
- * `Cannot read properties of undefined (reading 'toLowerCase')` and failed the
- * production build during static generation.
- *
- * Resolving it here means the rest of the app can use plain values without
- * non-null assertions, and a missing variable degrades to a sane default
- * instead of taking the build down.
+ * `NEXT_PUBLIC_APPLICATION_NAME` is optional, and it is unset on fresh clones
+ * and deploys whose env vars have not been added yet. Resolve it here so the
+ * rest of the app uses plain values with no non-null assertions and a missing
+ * variable degrades to a default instead of failing the build.
  */
 export const DEFAULT_APPLICATION_NAME = 'Qobuz-DL';
 

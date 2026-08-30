@@ -8,10 +8,7 @@ export type FilterDataType = {
     icon: LucideIcon;
 }[];
 
-/**
- * Lives here rather than in `app/search-view.tsx` because release-card imports
- * it, and a leaf component should not depend on the page that renders it.
- */
+/** Lives in `lib/`: release-card imports it, and a leaf must not depend on the page. */
 export const filterData: FilterDataType = [
     { label: 'Albums', value: 'albums', icon: DiscAlbumIcon },
     { label: 'Tracks', value: 'tracks', icon: Disc3Icon },
@@ -30,10 +27,8 @@ export type CatalogueResult = QobuzAlbum | QobuzTrack | QobuzArtist;
 /**
  * How many skeleton slots to render after `items`.
  *
- * The previous implementation stretched `items.length` and `.fill(null, …)` to
- * reserve skeleton slots, so the array held a mix of results and nulls and
- * "how many results are there" had three different answers depending on whether
- * you counted the padding. The count is now separate from the items.
+ * Separate from `items` on purpose: padding `items` with nulls makes
+ * "how many results are loaded" mean different things to different readers.
  */
 export function placeholderCount(page: unknown): number {
     const { items, limit, offset, total } = (page ?? {}) as Partial<ResultPage<unknown>>;

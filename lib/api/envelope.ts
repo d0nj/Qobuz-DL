@@ -25,9 +25,8 @@ export const DEFAULT_ERROR_STATUS = 400;
 /**
  * Normalises anything thrown into something JSON-serialisable.
  *
- * Zod failures carry their issues on `error.errors`/`error.issues`; the previous
- * per-route handlers stringified `error.errors` verbatim, which put unresolved
- * internal paths in the response body. Flattened issues are stable and safe.
+ * Zod issues are flattened: stringifying `error.errors` verbatim leaks
+ * unresolved internal paths into the response body.
  */
 export function normalizeError(error: unknown): unknown {
     if (error instanceof z.ZodError) return error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }));
@@ -47,8 +46,7 @@ export function fail(error: unknown, status: number = DEFAULT_ERROR_STATUS): Nex
  * Reads the search params off a request and validates them.
  *
  * `URLSearchParams` values are always strings, so numeric fields must go through
- * `z.preprocess` — a bare `z.number()` can never accept `"1000"`. Routes that
- * forgot this rejected every request carrying that param.
+ * `z.preprocess` — a bare `z.number()` can never accept `"1000"`.
  */
 export function parseParams<TSchema extends z.ZodTypeAny>(request: Request, schema: TSchema): z.infer<TSchema> {
     const params = Object.fromEntries(new URL(request.url).searchParams.entries());
@@ -88,13 +86,12 @@ export function qobuzOptions(country: string | undefined): QobuzServerOptions {
 }
 
 /**
- * Adapts a numeric schema to the string a query param arrives as.
+ * Adapts a numeric schema to the string a query param always arrives as — a
+ * bare `z.number()` rejects `"1000"`.
  *
- * Both halves matter. A bare `z.number()` rejects `"1000"`, which is why
- * `track_size` used to fail every request that passed it. And
- * `z.preprocess(parseInt, schema.default(n))` silently breaks defaults: the
- * preprocessor turns an absent param into `NaN` before zod can apply
- * `.default()`, so omitting the param returns 400 instead of the default.
+ * Preprocess to the default, not through `parseInt` alone: `parseInt` turns an
+ * absent param into `NaN` before zod can apply `.default()`, so omitting the
+ * param would 400 instead of using the default.
  */
 export function numericParam<TSchema extends z.ZodTypeAny>(schema: TSchema) {
     return z.preprocess((raw) => {

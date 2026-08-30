@@ -14,19 +14,14 @@ export const codecMap = {
     OPUS: { extension: 'opus', codec: 'libopus' }
 } as const;
 
-/**
- * Qobuz `format_id` values. 27/7/6 are lossless tiers (FLAC at descending
- * sample rates); 5 is the lossy tier, served as MP3.
- */
+/** Qobuz format_id: 27/7/6 lossless FLAC tiers, 5 lossy MP3. */
 const LOSSY_QUALITY: OutputQuality = '5';
 
 /**
  * Single source of truth for "do we need an encoder?".
  *
- * This decision used to be duplicated in three places, and the caller's copy
- * disagreed: it tested `outputQuality === '27'` while this tests `!== '5'`. At
- * FLAC quality 6 or 7 with metadata off, that loaded a ~30MB ffmpeg.wasm blob
- * which was then never used.
+ * Every caller must ask here; a second copy of this test is how a ~30MB
+ * ffmpeg.wasm blob gets loaded and then never used.
  *
  * The tier, not the top tier, is what matters: any lossless source requested as
  * FLAC is already correct, whichever lossless tier it came from.
@@ -39,10 +34,7 @@ export function needsEncoder(settings: SettingsProps): boolean {
     return !isSourceUsableAsIs(settings) || settings.applyMetadata;
 }
 
-/**
- * Filtered array rather than `cond ? arg : ''`, which passed literal empty
- * strings to ffmpeg whenever bitrate was unset — i.e. every lossless encode.
- */
+/** Never pass an empty-string arg to ffmpeg; unset bitrate means omit it. */
 export function buildTranscodeArgs(settings: SettingsProps, inputName: string, outputName: string): string[] {
     const extension = codecMap[settings.outputCodec].extension;
     const inputExtension = settings.outputQuality === LOSSY_QUALITY ? 'mp3' : 'flac';
@@ -62,8 +54,8 @@ export function buildTranscodeArgs(settings: SettingsProps, inputName: string, o
  * Optional fields are appended conditionally, so a missing ISRC never produces
  * a blank `isrc=` line.
  *
- * Lyrics are escaped: a raw newline ends the entry, so unescaped lyrics truncate
- * at the first line. Verified against ffmpeg 7.1 — see `escapeMetadataValue`.
+ * A raw newline ends an FFMETADATA1 entry, so unescaped lyrics truncate to their
+ * first line — hence `escapeMetadataValue`.
  */
 export function buildMetadataText(track: QobuzTrack, upc?: string, lyrics?: { plain: string; synced?: string | null } | null): string {
     const album = getAlbum(track);

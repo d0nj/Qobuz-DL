@@ -5,15 +5,15 @@ import { defaultSettings, type SettingsProps } from '@/lib/settings-schema';
 const settings = (overrides: Partial<SettingsProps>): SettingsProps => ({ ...defaultSettings, ...overrides });
 
 /**
- * What the caller used to decide, before the module owned the answer.
- * Kept here so the regression asserts the old behaviour is genuinely gone.
+ * The caller-side copy of the "needs encoder?" test, kept so the regression
+ * proves the caller and the module agree.
  */
 const oldCallerLoadsFFmpeg = (s: SettingsProps): boolean =>
     s.applyMetadata || !((s.outputQuality === '27' && s.outputCodec === 'FLAC') || (s.bitrate === 320 && s.outputCodec === 'MP3'));
 
 describe('needsEncoder', () => {
     it('does not load an encoder for a lossless source already requested as FLAC', () => {
-        // The bug: the caller only recognised quality 27, so 6 and 7 downloaded
+        // Caller-side logic only recognised quality 27, so 6 and 7 loaded
         // ~30MB of ffmpeg.wasm and then declined to use it.
         for (const quality of ['27', '7', '6'] as const) {
             expect(needsEncoder(settings({ outputQuality: quality, outputCodec: 'FLAC', applyMetadata: false }))).toBe(false);
