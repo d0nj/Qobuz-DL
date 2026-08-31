@@ -32,9 +32,24 @@ export function startSingle(track: QobuzTrack): PlayerQueue {
 }
 
 export function playNext(queue: PlayerQueue, track: QobuzTrack): PlayerQueue {
-    const tracks = [...queue.tracks];
-    tracks.splice(queue.current + 1, 0, { track, albumId: albumIdOf(track) });
-    return { ...queue, tracks };
+    return { ...queue, ...moved(queue, track, queue.current + 1) };
+}
+
+/**
+ * Places `track` at `insertAt`, having removed any entry it already had.
+ *
+ * Without the removal, "play next" on a track the queue already holds plays it
+ * twice. Removing an entry that sits before the current one shifts the current
+ * track down by one, so `current` is corrected to keep the same track playing.
+ */
+function moved(queue: PlayerQueue, track: QobuzTrack, insertAt: number): PlayerQueue {
+    const existing = queue.tracks.findIndex((entry) => entry.track.id === track.id);
+    if (existing === queue.current) return queue;
+
+    const tracks = queue.tracks.filter((entry) => entry.track.id !== track.id);
+    const shifted = existing !== -1 && existing < queue.current ? queue.current - 1 : queue.current;
+    tracks.splice(insertAt, 0, { track, albumId: albumIdOf(track) });
+    return { tracks, current: shifted };
 }
 
 export function addToQueue(queue: PlayerQueue, track: QobuzTrack): PlayerQueue {

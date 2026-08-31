@@ -33,6 +33,29 @@ describe('player queue', () => {
         expect(queue.tracks.map((t) => t.track.id)).toEqual([1, 9, 2, 3]);
     });
 
+    it('moves a track already in the queue instead of playing it twice', () => {
+        // "Play next" on a track that is already queued is a move, not a copy:
+        // leaving the later entry in place plays the track twice.
+        const queue = playNext(startAlbum(album(track(1), track(2), track(3)), 0), track(3));
+        expect(queue.tracks.map((t) => t.track.id)).toEqual([1, 3, 2]);
+    });
+
+    it('leaves the queue alone when the track moved next is already playing', () => {
+        // Current is t3 (index 2). Moving the track that is already playing to
+        // "next" is a no-op — there is nothing to bring forward.
+        const queue = playNext(startAlbum(album(track(1), track(2), track(3)), 2), track(3));
+        expect(queue.tracks.map((t) => t.track.id)).toEqual([1, 2, 3]);
+        expect(queue.current).toBe(2);
+    });
+
+    it('corrects the current index when the moved track sat before it', () => {
+        // t1 is pulled from index 0 to index 3 (after current), so everything
+        // between shifts down and `current` must follow the track it pointed at.
+        const queue = playNext(startAlbum(album(track(1), track(2), track(3)), 2), track(1));
+        expect(queue.tracks.map((t) => t.track.id)).toEqual([2, 3, 1]);
+        expect(queue.current).toBe(1);
+    });
+
     it('appends add-to-queue at the end', () => {
         const queue = addToQueue(startAlbum(album(track(1), track(2)), 0), track(9));
         expect(queue.tracks.map((t) => t.track.id)).toEqual([1, 2, 9]);
