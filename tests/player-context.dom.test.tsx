@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { act, render, cleanup } from '@testing-library/react';
+import { act, render, cleanup, fireEvent, screen } from '@testing-library/react';
 import { useEffect } from 'react';
+import PlayerBar from '@/components/player/player-bar';
 import { PlayerProvider, usePlayer } from '@/lib/player/context';
 import type { QobuzTrack } from '@/lib/qobuz-dl';
 
@@ -550,6 +551,119 @@ describe('PlayerProvider', () => {
         expect(hook!.state.queue?.current).toBe(1);
 
         restoreClient.mockRestore();
+        cleanup();
+    });
+});
+
+describe('PlayerBar', () => {
+    it('renders nothing before the first play', () => {
+        render(
+            <PlayerProvider>
+                <PlayerBar />
+            </PlayerProvider>
+        );
+
+        expect(screen.queryByText('t1')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
+        cleanup();
+    });
+
+    it('shows the current track and transport controls once a queue exists', async () => {
+        render(
+            <PlayerProvider>
+                <PlayerBar />
+                <Probe />
+            </PlayerProvider>
+        );
+
+        await act(async () => {
+            hook!.play(track);
+            await flush();
+        });
+
+        expect(screen.getByText('t1')).toBeTruthy();
+        expect(screen.getByText('Artist One')).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Next' })).toBeTruthy();
+        expect(screen.getByRole('img', { name: 't1' }).getAttribute('src')).toBe('s');
+        cleanup();
+    });
+
+    it('reflects pause state and reports it back through toggle', async () => {
+        render(
+            <PlayerProvider>
+                <PlayerBar />
+                <Probe />
+            </PlayerProvider>
+        );
+
+        await act(async () => {
+            hook!.play(track);
+            await flush();
+        });
+
+        const toggle = screen.getByRole('button', { name: 'Pause' });
+        await act(async () => {
+            fireEvent.click(toggle);
+            await flush();
+        });
+
+        // Mutation-tested: a bar reading a cached copy of `playing` would keep
+        // showing Pause here, so the label is the observable contract.
+        expect(screen.getByRole('button', { name: 'Play' })).toBeTruthy();
+        expect(hook!.state.playing).toBe(false);
+        cleanup();
+    });
+
+    it('skips to the next track from the bar', async () => {
+        render(
+            <PlayerProvider>
+                <PlayerBar />
+                <Probe />
+            </PlayerProvider>
+        );
+
+        await act(async () => {
+            hook!.play(track);
+            await flush();
+        });
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+            await flush();
+        });
+
+        expect(hook!.state.queue?.current).toBe(1);
+        expect(screen.getByText('t2')).toBeTruthy();
+        cleanup();
+    });
+
+    it('stops the controls from bubbling into the expand target', async () => {
+        render(
+            <PlayerProvider>
+                <PlayerBar />
+                <Probe />
+            </PlayerProvider>
+        );
+
+        await act(async () => {
+            hook!.play(track);
+            await flush();
+        });
+
+        const next = screen.getByRole('button', { name: 'Next' });
+        const expanded = () => document.querySelector('[data-testid="player-sheet"]');
+
+        expect(expanded()).toBeNull();
+
+        await act(async () => {
+            fireEvent.click(next);
+            await flush();
+        });
+
+        // Mutation-tested: without stopPropagation the skip also opens the
+        // sheet, so a tap on a control would navigate the user away.
+        expect(expanded()).toBeNull();
         cleanup();
     });
 });
