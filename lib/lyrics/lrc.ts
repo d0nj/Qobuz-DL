@@ -16,8 +16,14 @@ export function parseLrc(text: string): SyncedLyric[] {
         let match: RegExpExecArray | null;
         STAMP.lastIndex = 0;
         while ((match = STAMP.exec(line)) !== null) {
-            const fraction = match[3] ? Number(`0.${match[3]}`) : 0;
-            stamps.push(Number(match[1]) * 60 + Number(match[2]) + fraction);
+            // The stamp is one decimal number split across mm:ss.ff, so it is
+            // rebuilt as one decimal literal before parsing. Summing the parts
+            // instead is arithmetically equal but bitwise off: 1 + 0.14
+            // accumulates to 1.1400000000000001, which breaks exact equality
+            // against a literal. `minutes * 60 + seconds` is an exact integer,
+            // so the concatenation stays exact up to the fraction.
+            const seconds = Number(match[1]) * 60 + Number(match[2]);
+            stamps.push(Number(`${seconds}.${match[3] ?? '0'}`));
         }
         if (stamps.length === 0) continue;
         const words = line.replace(STAMP, '').trim();

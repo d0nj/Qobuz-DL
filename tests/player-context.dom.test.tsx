@@ -124,7 +124,7 @@ const audio = () => document.querySelector('audio')!;
 beforeEach(() => {
     hook = null;
     unwrapMock.mockClear();
-    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('lyrics offline'))));
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 404 } as unknown as Response)));
 });
 
 describe('PlayerProvider', () => {

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Pause, Play, SkipForward } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
+import PlayerSheet from '@/components/player/player-sheet';
 import { usePlayer } from '@/lib/player/context';
 import { formatArtists, formatTitle } from '@/lib/qobuz-dl';
 
@@ -37,17 +38,7 @@ const PlayerBar = () => {
 
     return (
         <div className={`pointer-events-none fixed inset-x-0 ${ABOVE_STATUS_BAR} z-[30] mx-auto flex w-full max-w-screen flex-col gap-2 px-4`}>
-            {expanded ? (
-                <div data-testid='player-sheet' className='pointer-events-auto container border border-border bg-card/95 p-4 shadow-lg backdrop-blur'>
-                    <p className='index-numeral text-muted-foreground'>Now playing</p>
-                    <p className='truncate text-sm font-medium text-foreground' title={title}>
-                        {title}
-                    </p>
-                    <p className='truncate text-xs text-muted-foreground' title={artist}>
-                        {artist}
-                    </p>
-                </div>
-            ) : null}
+            <PlayerSheet open={expanded} onClose={() => setExpanded(false)} />
             <motion.div
                 data-testid='player-bar'
                 initial={{ y: 64, opacity: 0 }}

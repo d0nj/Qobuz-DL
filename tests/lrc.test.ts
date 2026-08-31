@@ -23,4 +23,12 @@ describe('parseLrc', () => {
             { time: 9, line: 'b' }
         ]);
     });
+
+    it('yields the exact decimal a stamp denotes, not a float-accumulated one', () => {
+        // 1 + 0.14 accumulates to 1.1400000000000001 in binary, which breaks
+        // exact equality for anything downstream doing `l.time === 1.14`.
+        // Verified by sweeping every valid [mm:ss.ff] stamp: this is one of
+        // the 43 (of 600,000) that come out wrong when summed in parts.
+        expect(parseLrc('[00:01.14] hello')[0].time).toBe(1.14);
+    });
 });
