@@ -5,12 +5,21 @@ import type { FetchedQobuzAlbum, QobuzTrack } from '@/lib/qobuz-dl';
 const track = (id: number, streamable = true): QobuzTrack =>
     ({ id, title: `t${id}`, streamable, track_number: id, media_number: 1 } as unknown as QobuzTrack);
 
-const album = (...tracks: QobuzTrack[]): FetchedQobuzAlbum => ({ id: 10, tracks: { items: tracks } } as unknown as FetchedQobuzAlbum);
+const album = (...tracks: QobuzTrack[]): FetchedQobuzAlbum => ({ id: '10', tracks: { items: tracks } } as unknown as FetchedQobuzAlbum);
 
 describe('player queue', () => {
     it('loads a streamable album starting at the tapped index', () => {
         const queue = startAlbum(album(track(1), track(2, false), track(3)), 2);
         expect(queue.tracks.map((t) => t.track.id)).toEqual([1, 3]);
+        expect(queue.current).toBe(1);
+    });
+
+    // Discriminates a real id lookup from a naive `Math.min(startIndex, len-1)`
+    // clamp: the non-streamable track(2) shifts every post-gap index, so the
+    // clamp answers 2 where the correct index is 1.
+    it('maps the tapped index onto the filtered list, not the raw list', () => {
+        const queue = startAlbum(album(track(1), track(2, false), track(3), track(4)), 2);
+        expect(queue.tracks.map((t) => t.track.id)).toEqual([1, 3, 4]);
         expect(queue.current).toBe(1);
     });
 
@@ -30,12 +39,17 @@ describe('player queue', () => {
     });
 
     it('skips forward and stops at the end', () => {
-        const queue = skip({ tracks: [{ track: track(1), albumId: 10 }, { track: track(2), albumId: 10 }], current: 1 });
+        const queue = skip({ tracks: [{ track: track(1), albumId: '10' }, { track: track(2), albumId: '10' }], current: 1 });
         expect(queue.current).toBe(1);
     });
 
+    it('keeps current at 0 when skipping an empty queue', () => {
+        const queue = skip({ tracks: [], current: 0 });
+        expect(queue.current).toBe(0);
+    });
+
     it('goes back and clamps at the start', () => {
-        const queue = previous({ tracks: [{ track: track(1), albumId: 10 }], current: 0 });
+        const queue = previous({ tracks: [{ track: track(1), albumId: '10' }], current: 0 });
         expect(queue.current).toBe(0);
     });
 
@@ -43,5 +57,21 @@ describe('player queue', () => {
         const queue = startSingle(track(7));
         expect(queue.tracks.map((t) => t.track.id)).toEqual([7]);
         expect(queue.current).toBe(0);
+    });
+
+    // albumId is QobuzAlbum['id'], a string. A track without an album must
+    // still yield a string — never the number 0, which would typecheck only
+    // because QobuzTrack.album is declared non-optional.
+    it('gives an album-less track a string albumId, never a number', () => {
+        const orphan = track(5);
+        expect(startSingle(orphan).tracks[0].albumId).toBe('');
+        expect(typeof startSingle(orphan).tracks[0].albumId).toBe('string');
+        expect(playNext({ tracks: [], current: 0 }, orphan).tracks[0].albumId).toBe('');
+        expect(addToQueue({ tracks: [], current: 0 }, orphan).tracks[0].albumId).toBe('');
+    });
+
+    it('carries the album id from the track onto the queue entry', () => {
+        const withAlbum = { ...track(6), album: { id: 'abc' } } as unknown as QobuzTrack;
+        expect(startSingle(withAlbum).tracks[0].albumId).toBe('abc');
     });
 });

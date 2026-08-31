@@ -1,8 +1,18 @@
 import type { FetchedQobuzAlbum, QobuzAlbum, QobuzTrack } from '@/lib/qobuz-dl';
 
-/** Album ids are strings in the Qobuz payload (QobuzAlbum.id), though numeric in places. */
+/** Album ids are strings in the Qobuz payload (QobuzAlbum.id). */
 export type PlayerTrack = { track: QobuzTrack; albumId: QobuzAlbum['id'] };
 export type PlayerQueue = { tracks: PlayerTrack[]; current: number };
+
+/**
+ * A track's album id, or '' when the track carries no album.
+ *
+ * The fallback is the empty string, not a number: PlayerTrack.albumId is
+ * QobuzAlbum['id'], which is a string. A numeric fallback here would only
+ * typecheck because QobuzTrack.album is declared non-optional, so TypeScript
+ * never evaluates the `??` — the number would still reach callers at runtime.
+ */
+const albumIdOf = (track: QobuzTrack): QobuzAlbum['id'] => track.album?.id ?? '';
 
 /** Streamable is a Qobuz rights flag; the download path filters on it already. */
 const fromAlbum = (album: FetchedQobuzAlbum): PlayerTrack[] =>
@@ -11,25 +21,28 @@ const fromAlbum = (album: FetchedQobuzAlbum): PlayerTrack[] =>
 export function startAlbum(album: FetchedQobuzAlbum, startIndex: number): PlayerQueue {
     const tracks = fromAlbum(album);
     const targetId = album.tracks.items[startIndex]?.id;
-    const current = Math.max(0, tracks.findIndex((t) => t.track.id === targetId));
+    // Look the id up in the *filtered* list: dropping non-streamable tracks
+    // shifts every index after the first gap.
+    const current = tracks.findIndex((t) => t.track.id === targetId);
     return { tracks, current: current === -1 ? 0 : current };
 }
 
 export function startSingle(track: QobuzTrack): PlayerQueue {
-    return { tracks: [{ track, albumId: track.album?.id ?? 0 }], current: 0 };
+    return { tracks: [{ track, albumId: albumIdOf(track) }], current: 0 };
 }
 
 export function playNext(queue: PlayerQueue, track: QobuzTrack): PlayerQueue {
     const tracks = [...queue.tracks];
-    tracks.splice(queue.current + 1, 0, { track, albumId: track.album?.id ?? 0 });
+    tracks.splice(queue.current + 1, 0, { track, albumId: albumIdOf(track) });
     return { ...queue, tracks };
 }
 
 export function addToQueue(queue: PlayerQueue, track: QobuzTrack): PlayerQueue {
-    return { ...queue, tracks: [...queue.tracks, { track, albumId: track.album?.id ?? 0 }] };
+    return { ...queue, tracks: [...queue.tracks, { track, albumId: albumIdOf(track) }] };
 }
 
 export function skip(queue: PlayerQueue): PlayerQueue {
+    if (queue.tracks.length === 0) return { ...queue, current: 0 };
     return { ...queue, current: Math.min(queue.current + 1, queue.tracks.length - 1) };
 }
 
