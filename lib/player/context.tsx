@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { getApiClient } from '@/lib/api/client';
+import { useCountry } from '@/lib/country-provider';
 import { parseLrc, type SyncedLyric } from '@/lib/lyrics/lrc';
 import { lrclib } from '@/lib/lyrics/lrclib';
 import type { FetchedQobuzAlbum, QobuzTrack } from '@/lib/qobuz-dl';
@@ -75,13 +76,19 @@ function publishMetadata(track: QobuzTrack): void {
  * malformed, no synced variant — are indistinguishable from "no entry".
  */
 async function fetchSyncedLyrics(track: QobuzTrack): Promise<SyncedLyric[] | null> {
-    const lyrics = await lrclib.fetchLyrics({
-        artist: track.performer?.name ?? '',
-        title: track.title,
-        album: track.album?.title,
-        duration: track.duration
-    });
-    return lyrics?.synced ? parseLrc(lyrics.synced) : null;
+    try {
+        const lyrics = await lrclib.fetchLyrics({
+            artist: track.performer?.name ?? '',
+            title: track.title,
+            album: track.album?.title,
+            duration: track.duration
+        });
+        return lyrics?.synced ? parseLrc(lyrics.synced) : null;
+    } catch {
+        // lrclib rejects on a network failure rather than returning null;
+        // an escaped rejection here would surface as an unhandled one.
+        return null;
+    }
 }
 
 /** The queue as an index into `queue.tracks`, clamped to the tracks that exist. */
@@ -102,9 +109,23 @@ function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>;
     const albumCache = useRef(new Map<string, FetchedQobuzAlbum>());
     /** Track id → CDN URL, filled one track ahead so `ended` has no gap. */
     const urlCache = useRef(new Map<number, string>());
+    /**
+     * Mirrors the browsing country. Kept as a ref rather than a dependency so
+     * a country change never rebuilds `loadAt` — its identity change would
+     * re-run the audio effect and pause playback mid-track.
+     */
     const countryRef = useRef<string | null>(null);
     /** Guards the auto-skip chain so a failing queue cannot recurse. */
     const advancingRef = useRef(false);
+    /** Cancels superseded `play` calls; the last tap wins. */
+    const playGenerationRef = useRef(0);
+    /** The track whose lyrics were last requested, so repeats dedupe. */
+    const lyricsTrackIdRef = useRef<number | null>(null);
+
+    const { country } = useCountry();
+    useEffect(() => {
+        countryRef.current = country ?? null;
+    }, [country]);
 
     const setQueue = useCallback((queue: PlayerQueue | null) => {
         queueRef.current = queue;
@@ -126,7 +147,13 @@ function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>;
                 setState((prev) => ({ ...prev, playing: false }));
             }
             publishMetadata(loaded.track);
-            void fetchSyncedLyrics(loaded.track).then(setSyncedLyrics);
+            // A lookup still in flight when the track changed must not land
+            // afterwards onto the new track's lyrics; the ref holds the track
+            // the provider last committed to, so a stale answer is dropped.
+            lyricsTrackIdRef.current = loaded.track.id;
+            void fetchSyncedLyrics(loaded.track).then((lyrics) => {
+                if (lyricsTrackIdRef.current === loaded.track.id) setSyncedLyrics(lyrics);
+            });
         },
         []
     );
@@ -217,11 +244,13 @@ function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>;
 
     const play = useCallback(
         async (track: QobuzTrack) => {
+            const generation = ++playGenerationRef.current;
             const albumId = track.album?.id;
             let queue: PlayerQueue | null = null;
             if (albumId) {
                 const cached = albumCache.current.get(albumId) ?? null;
                 const album = cached ?? (await fetchAlbum(albumId, countryRef.current).catch(() => null));
+                if (generation !== playGenerationRef.current) return;
                 if (album) {
                     albumCache.current.set(albumId, album);
                     const index = album.tracks.items.findIndex((item) => item.id === track.id);

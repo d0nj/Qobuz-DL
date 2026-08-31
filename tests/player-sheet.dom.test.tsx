@@ -3,6 +3,7 @@ import { act, render, cleanup, fireEvent, screen } from '@testing-library/react'
 import { useEffect } from 'react';
 import PlayerSheet from '@/components/player/player-sheet';
 import { PlayerProvider, usePlayer } from '@/lib/player/context';
+import { CountryProvider } from '@/lib/country-provider';
 import type { QobuzTrack } from '@/lib/qobuz-dl';
 
 const toastErrors: string[] = [];
@@ -119,11 +120,13 @@ const flush = async () => {
     for (let i = 0; i < 10; i++) await settle();
 };
 
-const unwrapMock = vi.fn().mockImplementation((path: string, options?: { params?: Record<string, unknown> }) =>
-    path.includes('album')
-        ? Promise.resolve({ id: '10', tracks: { items: [track, { ...track, id: 2, title: 't2' }] } })
-        : Promise.resolve({ url: `https://cdn.example.com/stream?id=${String(options?.params?.track_id ?? '?')}` })
-);
+const unwrapMock = vi
+    .fn()
+    .mockImplementation((path: string, options?: { params?: Record<string, unknown> }) =>
+        path.includes('album')
+            ? Promise.resolve({ id: '10', tracks: { items: [track, { ...track, id: 2, title: 't2' }] } })
+            : Promise.resolve({ url: `https://cdn.example.com/stream?id=${String(options?.params?.track_id ?? '?')}` })
+    );
 
 vi.mock('@/lib/api/client', () => ({
     getApiClient: () => ({
@@ -151,7 +154,10 @@ beforeAll(() => {
 beforeEach(() => {
     hook = null;
     unwrapMock.mockClear();
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 404 } as unknown as Response)));
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.resolve({ ok: false, status: 404 } as unknown as Response))
+    );
 });
 
 const mountSheet = async (lyrics?: unknown) => {
@@ -162,10 +168,12 @@ const mountSheet = async (lyrics?: unknown) => {
         );
     }
     render(
-        <PlayerProvider>
-            <PlayerSheet open onClose={() => {}} />
-            <Probe />
-        </PlayerProvider>
+        <CountryProvider>
+            <PlayerProvider>
+                <PlayerSheet open onClose={() => {}} />
+                <Probe />
+            </PlayerProvider>
+        </CountryProvider>
     );
     await act(async () => {
         hook!.play(track);
@@ -234,7 +242,7 @@ describe('PlayerSheet', () => {
         const root = slider.parentElement!.parentElement!;
         // jsdom lays every element out at 0×0, so the geometry the drag maths
         // runs on is supplied directly: a 100px-wide track at x=0.
-        root.getBoundingClientRect = () => ({ width: 100, left: 0, right: 100 } as DOMRect);
+        root.getBoundingClientRect = () => ({ width: 100, left: 0, right: 100 }) as DOMRect;
 
         await act(async () => {
             root.dispatchEvent(pointerEvent('pointerdown', 20));
@@ -303,10 +311,17 @@ describe('PlayerSheet', () => {
             vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ plainLyrics: 'a', syncedLyrics: '[00:01.00] one' }) } as unknown as Response))
         );
         render(
-            <PlayerProvider>
-                <PlayerSheet open onClose={() => { closed = true; }} />
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <PlayerSheet
+                        open
+                        onClose={() => {
+                            closed = true;
+                        }}
+                    />
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
         await act(async () => {
             hook!.play(track);
@@ -323,10 +338,12 @@ describe('PlayerSheet', () => {
 
     it('stays closed when told to', async () => {
         render(
-            <PlayerProvider>
-                <PlayerSheet open={false} onClose={() => {}} />
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <PlayerSheet open={false} onClose={() => {}} />
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
         await act(async () => {
             hook!.play(track);

@@ -3,6 +3,7 @@ import { act, render, cleanup, fireEvent, screen } from '@testing-library/react'
 import { useEffect } from 'react';
 import PlayerBar from '@/components/player/player-bar';
 import { PlayerProvider, usePlayer } from '@/lib/player/context';
+import { CountryProvider, useCountry } from '@/lib/country-provider';
 import type { QobuzTrack } from '@/lib/qobuz-dl';
 
 // ESM exports are non-configurable, so `toast` must be mocked at module scope
@@ -124,15 +125,20 @@ const audio = () => document.querySelector('audio')!;
 beforeEach(() => {
     hook = null;
     unwrapMock.mockClear();
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 404 } as unknown as Response)));
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.resolve({ ok: false, status: 404 } as unknown as Response))
+    );
 });
 
 describe('PlayerProvider', () => {
     it('plays a track and advances on ended', async () => {
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -156,9 +162,11 @@ describe('PlayerProvider', () => {
 
     it('pauses and resumes on toggle', async () => {
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -185,9 +193,11 @@ describe('PlayerProvider', () => {
 
     it('tracks position and duration from audio events', async () => {
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -211,9 +221,11 @@ describe('PlayerProvider', () => {
 
     it('seeks by assigning currentTime', async () => {
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -230,9 +242,11 @@ describe('PlayerProvider', () => {
 
     it('enqueues and plays next without disturbing the current track', async () => {
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
         const third = { ...track, id: 3, title: 't3' } as unknown as QobuzTrack;
         const extra = { ...track, id: 9, title: 't9' } as unknown as QobuzTrack;
@@ -256,9 +270,11 @@ describe('PlayerProvider', () => {
 
     it('skipForward and skipBackward move through the queue', async () => {
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -285,9 +301,11 @@ describe('PlayerProvider', () => {
 
     it('reports duration from the track and stops at the end of the queue', async () => {
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -315,9 +333,11 @@ describe('PlayerProvider', () => {
 
     it('reuses the cached album instead of refetching it', async () => {
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -350,9 +370,11 @@ describe('PlayerProvider', () => {
         );
 
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -369,9 +391,11 @@ describe('PlayerProvider', () => {
 
     it('leaves lyrics null when lrclib has nothing', async () => {
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -386,9 +410,11 @@ describe('PlayerProvider', () => {
 
     it('publishes mediaSession metadata when the browser supports it', async () => {
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -402,9 +428,11 @@ describe('PlayerProvider', () => {
     });
 
     it('degrades to a single-track queue when the album fetch fails', async () => {
-        const failures = vi.fn().mockImplementation((path: string) =>
-            path.includes('album') ? Promise.reject(new Error('album down')) : Promise.resolve({ url: 'https://cdn.example.com/one' })
-        );
+        const failures = vi
+            .fn()
+            .mockImplementation((path: string) =>
+                path.includes('album') ? Promise.reject(new Error('album down')) : Promise.resolve({ url: 'https://cdn.example.com/one' })
+            );
         const client = await import('@/lib/api/client');
         const restore = vi.spyOn(client, 'getApiClient').mockReturnValue({
             unwrap: failures,
@@ -412,9 +440,11 @@ describe('PlayerProvider', () => {
         } as unknown as ReturnType<typeof client.getApiClient>);
 
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -430,11 +460,13 @@ describe('PlayerProvider', () => {
     });
 
     it('toasts and stops at the queue end when the stream URL cannot be fetched', async () => {
-        const failures = vi.fn().mockImplementation((path: string) =>
-            path.includes('album')
-                ? Promise.resolve({ id: '10', tracks: { items: [track, { ...track, id: 2, title: 't2' }] } })
-                : Promise.reject(new Error('stream down'))
-        );
+        const failures = vi
+            .fn()
+            .mockImplementation((path: string) =>
+                path.includes('album')
+                    ? Promise.resolve({ id: '10', tracks: { items: [track, { ...track, id: 2, title: 't2' }] } })
+                    : Promise.reject(new Error('stream down'))
+            );
         const client = await import('@/lib/api/client');
         const restoreClient = vi.spyOn(client, 'getApiClient').mockReturnValue({
             unwrap: failures,
@@ -444,9 +476,11 @@ describe('PlayerProvider', () => {
         toastErrors.length = 0;
 
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -466,9 +500,11 @@ describe('PlayerProvider', () => {
         Object.defineProperty(navigator, 'mediaSession', { value: undefined, configurable: true });
 
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -511,20 +547,24 @@ describe('PlayerProvider', () => {
 
         const client = await import('@/lib/api/client');
         const restoreClient = vi.spyOn(client, 'getApiClient').mockReturnValue({
-            unwrap: vi.fn().mockImplementation((path: string, options?: { params?: Record<string, unknown> }) =>
-                path.includes('album')
-                    ? Promise.resolve({ id: '10', tracks: { items: [track, { ...track, id: 2, title: 't2' }] } })
-                    : options?.params?.track_id === 1
-                      ? slowFirst
-                      : Promise.resolve({ url: 'https://cdn.example.com/stream?id=2' })
-            ),
+            unwrap: vi
+                .fn()
+                .mockImplementation((path: string, options?: { params?: Record<string, unknown> }) =>
+                    path.includes('album')
+                        ? Promise.resolve({ id: '10', tracks: { items: [track, { ...track, id: 2, title: 't2' }] } })
+                        : options?.params?.track_id === 1
+                          ? slowFirst
+                          : Promise.resolve({ url: 'https://cdn.example.com/stream?id=2' })
+                ),
             routes: { album: '/api/get-album', download: '/api/download-music' }
         } as unknown as ReturnType<typeof client.getApiClient>);
 
         render(
-            <PlayerProvider>
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -553,14 +593,213 @@ describe('PlayerProvider', () => {
         restoreClient.mockRestore();
         cleanup();
     });
+
+    it('resumes the paused track from where it stopped, not from zero', async () => {
+        render(
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
+        );
+
+        await act(async () => {
+            hook!.play(track);
+            await flush();
+        });
+        await act(async () => {
+            hook!.seek(37);
+            await flush();
+        });
+
+        await act(async () => {
+            hook!.toggle();
+            await flush();
+        });
+        expect(hook!.state.playing).toBe(false);
+
+        await act(async () => {
+            hook!.toggle();
+            await flush();
+        });
+
+        // The element must be asked to resume at the paused position — a
+        // resume that reloads from zero silently loses the listener's place.
+        expect(audio().currentTime).toBe(37);
+        expect(hook!.state.playing).toBe(true);
+        cleanup();
+    });
+
+    it('sends the browsing country with every album and stream request', async () => {
+        // Availability is country-scoped on the Qobuz side: without the
+        // Token-Country header the server serves a random region, so a
+        // region-locked release can play a different catalogue or fail.
+        const setCountry = (code: string) => {
+            const Setter = () => {
+                const { setCountry: apply } = useCountry();
+                useEffect(() => {
+                    apply(code);
+                }, []);
+                return null;
+            };
+            return <Setter />;
+        };
+        const seen: Array<{ path: string; options: { params?: Record<string, unknown>; country?: string | null } }> = [];
+        const client = await import('@/lib/api/client');
+        const restoreClient = vi.spyOn(client, 'getApiClient').mockReturnValue({
+            unwrap: vi.fn().mockImplementation((path: string, options?: { params?: Record<string, unknown>; country?: string | null }) => {
+                seen.push({ path, options: options ?? {} });
+                return path.includes('album')
+                    ? Promise.resolve({ id: '10', tracks: { items: [track, { ...track, id: 2, title: 't2' }] } })
+                    : Promise.resolve({ url: `https://cdn.example.com/stream?id=${String(options?.params?.track_id ?? '?')}` });
+            }),
+            routes: { album: '/api/get-album', download: '/api/download-music' }
+        } as unknown as ReturnType<typeof client.getApiClient>);
+
+        render(
+            <CountryProvider>
+                {setCountry('DE')}
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
+        );
+
+        try {
+            // The setter's effect and the provider's country-mirror effect must
+            // land before the tap, so the request carries what was browsed.
+            await act(async () => {
+                await flush();
+            });
+            await act(async () => {
+                hook!.play(track);
+                await flush();
+            });
+
+            const albumCall = seen.find((call) => call.path.includes('album'));
+            const downloadCall = seen.find((call) => call.path.includes('download'));
+            expect(albumCall?.options.country).toBe('DE');
+            expect(downloadCall?.options.country).toBe('DE');
+            // The stream quality the spec pins: format_id 27, highest available.
+            expect(downloadCall?.options.params).toMatchObject({ quality: '27' });
+        } finally {
+            restoreClient.mockRestore();
+            cleanup();
+        }
+    });
+
+    it('does not let a slower earlier tap overwrite the last-tapped album', async () => {
+        // Two albums tapped in quick succession; the first fetch is slow. The
+        // last intent must win: when A's response finally lands it must not
+        // replace the queue B already built and started playing.
+        const trackOf = (id: number, albumId: string) =>
+            ({ ...track, id, album: { ...track.album, id: albumId, title: `Album ${albumId}` } }) as unknown as QobuzTrack;
+
+        let releaseA!: (album: unknown) => void;
+        const slowAlbumA = new Promise<unknown>((resolve) => {
+            releaseA = resolve;
+        });
+        const client = await import('@/lib/api/client');
+        const restoreClient = vi.spyOn(client, 'getApiClient').mockReturnValue({
+            unwrap: vi.fn().mockImplementation((path: string, options?: { params?: Record<string, unknown> }) => {
+                if (!path.includes('album')) return Promise.resolve({ url: `https://cdn.example.com/stream?id=${String(options?.params?.track_id ?? '?')}` });
+                return String(options?.params?.album_id) === 'A' ? slowAlbumA : Promise.resolve({ id: 'B', tracks: { items: [trackOf(20, 'B'), trackOf(21, 'B')] } });
+            }),
+            routes: { album: '/api/get-album', download: '/api/download-music' }
+        } as unknown as ReturnType<typeof client.getApiClient>);
+
+        render(
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
+        );
+
+        try {
+            await act(async () => {
+                hook!.play(trackOf(1, 'A')); // album A's fetch hangs
+                hook!.play(trackOf(20, 'B')); // the user immediately taps B instead
+                await flush();
+            });
+
+            // B resolved fast and is playing.
+            expect(hook!.current?.albumId).toBe('B');
+            expect(hook!.state.queue?.tracks.map((t) => t.track.id)).toEqual([20, 21]);
+
+            // A's late response lands — it must not displace B.
+            await act(async () => {
+                releaseA({ id: 'A', tracks: { items: [trackOf(1, 'A'), trackOf(2, 'A')] } });
+                await flush();
+            });
+
+            expect(hook!.current?.albumId).toBe('B');
+            expect(hook!.state.queue?.tracks.map((t) => t.track.id)).toEqual([20, 21]);
+            expect(hook!.state.queue?.current).toBe(0);
+        } finally {
+            restoreClient.mockRestore();
+            cleanup();
+        }
+    });
+
+    it('keeps track 2 lyrics when track 1 lookup resolves after a skip', async () => {
+        // Skip during a slow lyrics lookup: the stale lookup resolving late
+        // must not overwrite the lyrics already shown for the new track.
+        let releaseFirst!: (body: unknown) => void;
+        const held = new Promise<unknown>((resolve) => {
+            releaseFirst = resolve;
+        });
+        const calls: Promise<unknown>[] = [];
+        vi.stubGlobal('fetch', vi.fn(() => {
+            const body = calls.length === 0 ? held : Promise.resolve({ ok: true, json: () => Promise.resolve({ plainLyrics: 'x', syncedLyrics: '[00:01.00] second-track-line' }) });
+            calls.push(body);
+            return body;
+        }));
+
+        render(
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
+        );
+
+        await act(async () => {
+            hook!.play(track);
+            await flush();
+        });
+
+        await act(async () => {
+            hook!.skipForward();
+            await flush();
+        });
+
+        try {
+            // Track 2's lyrics have landed and are displayed.
+            expect(hook!.syncedLyrics).toEqual([{ time: 1, line: 'second-track-line' }]);
+
+            // Track 1's slow lookup finally resolves — after the switch.
+            await act(async () => {
+                releaseFirst({ ok: true, json: () => Promise.resolve({ plainLyrics: 'x', syncedLyrics: '[00:01.00] first-track-line' }) });
+                await flush();
+            });
+
+            expect(hook!.syncedLyrics).toEqual([{ time: 1, line: 'second-track-line' }]);
+        } finally {
+            vi.unstubAllGlobals();
+            cleanup();
+        }
+    });
 });
 
 describe('PlayerBar', () => {
     it('renders nothing before the first play', () => {
         render(
-            <PlayerProvider>
-                <PlayerBar />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <PlayerBar />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         expect(screen.queryByText('t1')).toBeNull();
@@ -570,10 +809,12 @@ describe('PlayerBar', () => {
 
     it('shows the current track and transport controls once a queue exists', async () => {
         render(
-            <PlayerProvider>
-                <PlayerBar />
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <PlayerBar />
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -591,10 +832,12 @@ describe('PlayerBar', () => {
 
     it('reflects pause state and reports it back through toggle', async () => {
         render(
-            <PlayerProvider>
-                <PlayerBar />
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <PlayerBar />
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -617,10 +860,12 @@ describe('PlayerBar', () => {
 
     it('skips to the next track from the bar', async () => {
         render(
-            <PlayerProvider>
-                <PlayerBar />
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <PlayerBar />
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {
@@ -640,10 +885,12 @@ describe('PlayerBar', () => {
 
     it('stops the controls from bubbling into the expand target', async () => {
         render(
-            <PlayerProvider>
-                <PlayerBar />
-                <Probe />
-            </PlayerProvider>
+            <CountryProvider>
+                <PlayerProvider>
+                    <PlayerBar />
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
         );
 
         await act(async () => {

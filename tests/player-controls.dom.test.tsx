@@ -6,7 +6,7 @@ import { PlayerProvider, usePlayer } from '@/lib/player/context';
 import { FFmpegProvider } from '@/lib/ffmpeg-provider';
 import { SettingsProvider } from '@/lib/settings-provider';
 import { StatusBarProvider } from '@/lib/status-bar/context';
-import { CountryProvider } from '@/lib/country-provider';
+import { CountryProvider, useCountry } from '@/lib/country-provider';
 import type { QobuzAlbum, QobuzTrack } from '@/lib/qobuz-dl';
 
 /**
@@ -116,13 +116,15 @@ const flush = async () => {
     for (let i = 0; i < 10; i++) await settle();
 };
 
-/** Album 10 holds two tracks; the stream URL echoes the requested track id. */
-const defaultUnwrap = (path: string, options?: { params?: Record<string, unknown> }) =>
+/** The options `unwrap` receives; country travels as a sibling of params. */
+type UnwrapOptions = { params?: Record<string, unknown>; country?: string | null };
+
+/** Album 10 holds three tracks; the stream URL echoes the requested track id. */
+const unwrapMock = vi.fn().mockImplementation((path: string, options?: UnwrapOptions) =>
     path.includes('album')
         ? Promise.resolve({ ...album, tracks: { items: [track(1, 't1'), track(2, 't2'), track(3, 't3')] } })
-        : Promise.resolve({ url: `https://cdn.example.com/stream?id=${String(options?.params?.track_id ?? '?')}` });
-
-const unwrapMock = vi.fn().mockImplementation(defaultUnwrap);
+        : Promise.resolve({ url: `https://cdn.example.com/stream?id=${String(options?.params?.track_id ?? '?')}` })
+);
 
 vi.mock('@/lib/api/client', () => ({
     getApiClient: () => ({
@@ -224,6 +226,63 @@ describe('card play button', () => {
         expect(toastErrors.length).toBeGreaterThan(0);
         expect(hook!.state.queue).toBeNull();
         expect(audio().src).toBe('');
+        cleanup();
+    });
+
+    it('reports an unstreamable track card instead of doing nothing', async () => {
+        // A track card with the rights flag off can never produce a stream.
+        // The same contract as the album branch: say so, touch nothing.
+        renderCard(track(1, 't1', false));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: "Play 't1'" }));
+            await flush();
+        });
+
+        expect(toastErrors.length).toBeGreaterThan(0);
+        expect(hook!.state.queue).toBeNull();
+        expect(audio().src).toBe('');
+        cleanup();
+    });
+
+    it('carries the browsing country from the card tree into the player requests', async () => {
+        // The card and the provider sit under the same CountryProvider in
+        // production; a play tap must forward what that context holds or the
+        // stream is served for the wrong region.
+        const SetFR = () => {
+            const { setCountry } = useCountry();
+            useEffect(() => {
+                setCountry('FR');
+            }, []);
+            return null;
+        };
+
+        render(
+            <SettingsProvider>
+                <CountryProvider>
+                    <SetFR />
+                    <StatusBarProvider>
+                        <FFmpegProvider>
+                            <PlayerProvider>
+                                <ReleaseCard result={track(1, 't1')} resolvedTheme='dark' />
+                                <Probe />
+                            </PlayerProvider>
+                        </FFmpegProvider>
+                    </StatusBarProvider>
+                </CountryProvider>
+            </SettingsProvider>
+        );
+
+        await act(async () => {
+            await flush();
+            fireEvent.click(screen.getByRole('button', { name: "Play 't1'" }));
+            await flush();
+        });
+
+        const countries = unwrapMock.mock.calls
+            .filter((call) => String(call[0]).includes('download'))
+            .map((call) => (call[1] as UnwrapOptions | undefined)?.country);
+        expect(countries).toContain('FR');
         cleanup();
     });
 });

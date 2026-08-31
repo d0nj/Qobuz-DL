@@ -43,7 +43,7 @@ const trackToStart = async (
     result: QobuzAlbum | QobuzTrack | QobuzArtist,
     country: string | undefined
 ): Promise<QobuzTrack | null> => {
-    if (item.isTrack) return result as QobuzTrack;
+    if (item.isTrack) return (result as QobuzTrack).streamable ? (result as QobuzTrack) : null;
     if (item.isArtist || !item.album) return null;
     const album = await getFullAlbumInfo(fetchedAlbumData, setFetchedAlbumData, item.album, country).catch(() => null);
     return album?.tracks.items.find((track) => track.streamable) ?? null;
