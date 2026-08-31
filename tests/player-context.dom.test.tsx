@@ -323,14 +323,14 @@ describe('PlayerProvider', () => {
             hook!.play(track);
             await flush();
         });
-        const albumsAfterFirst = unwrapMock.mock.calls.filter(([path]: [string]) => path.includes('album')).length;
+        const albumsAfterFirst = unwrapMock.mock.calls.filter((args) => String(args[0]).includes('album')).length;
         expect(albumsAfterFirst).toBe(1);
 
         await act(async () => {
             hook!.play({ ...track, id: 2, title: 't2' } as unknown as QobuzTrack);
             await flush();
         });
-        const albumsAfterSecond = unwrapMock.mock.calls.filter(([path]: [string]) => path.includes('album')).length;
+        const albumsAfterSecond = unwrapMock.mock.calls.filter((args) => String(args[0]).includes('album')).length;
 
         expect(albumsAfterSecond).toBe(1);
         expect(hook!.state.queue?.tracks.map((t) => t.track.id)).toEqual([1, 2]);
@@ -496,6 +496,60 @@ describe('PlayerProvider', () => {
                 </>
             );
         expect(expectation).toThrow('usePlayer must be used within a PlayerProvider');
+        cleanup();
+    });
+
+    it('abandons a slow stream lookup when the track changes underneath it', async () => {
+        // Two tracks, but the first one's URL resolves slowly. Switching tracks
+        // while that lookup is in flight must not let the stale response win —
+        // otherwise the element plays track 2's audio against track 1's title.
+        let releaseFirst!: (url: string) => void;
+        const slowFirst = new Promise<{ url: string }>((resolve) => {
+            releaseFirst = (url: string) => resolve({ url });
+        });
+
+        const client = await import('@/lib/api/client');
+        const restoreClient = vi.spyOn(client, 'getApiClient').mockReturnValue({
+            unwrap: vi.fn().mockImplementation((path: string, options?: { params?: Record<string, unknown> }) =>
+                path.includes('album')
+                    ? Promise.resolve({ id: '10', tracks: { items: [track, { ...track, id: 2, title: 't2' }] } })
+                    : options?.params?.track_id === 1
+                      ? slowFirst
+                      : Promise.resolve({ url: 'https://cdn.example.com/stream?id=2' })
+            ),
+            routes: { album: '/api/get-album', download: '/api/download-music' }
+        } as unknown as ReturnType<typeof client.getApiClient>);
+
+        render(
+            <PlayerProvider>
+                <Probe />
+            </PlayerProvider>
+        );
+
+        await act(async () => {
+            hook!.play(track);
+            await flush();
+        });
+
+        // Track 1 is still resolving; the user skips to track 2.
+        await act(async () => {
+            hook!.skipForward();
+            await flush();
+        });
+
+        // The stale response for track 1 lands after the switch.
+        await act(async () => {
+            releaseFirst('https://cdn.example.com/stream?id=1');
+            await flush();
+        });
+
+        // Mutation-tested: without the abort guard this fails. Removing
+        // `abortRef.current?.abort()` or the post-await `signal.aborted` check
+        // each let the stale URL overwrite the element.
+        expect(audio().src).toContain('id=2');
+        expect(hook!.state.queue?.current).toBe(1);
+
+        restoreClient.mockRestore();
         cleanup();
     });
 });
