@@ -1,0 +1,47 @@
+import { describe, expect, it } from 'vitest';
+import { addToQueue, playNext, previous, skip, startAlbum, startSingle } from '@/lib/player/player';
+import type { FetchedQobuzAlbum, QobuzTrack } from '@/lib/qobuz-dl';
+
+const track = (id: number, streamable = true): QobuzTrack =>
+    ({ id, title: `t${id}`, streamable, track_number: id, media_number: 1 } as unknown as QobuzTrack);
+
+const album = (...tracks: QobuzTrack[]): FetchedQobuzAlbum => ({ id: 10, tracks: { items: tracks } } as unknown as FetchedQobuzAlbum);
+
+describe('player queue', () => {
+    it('loads a streamable album starting at the tapped index', () => {
+        const queue = startAlbum(album(track(1), track(2, false), track(3)), 2);
+        expect(queue.tracks.map((t) => t.track.id)).toEqual([1, 3]);
+        expect(queue.current).toBe(1);
+    });
+
+    it('falls back to index 0 when the tapped track is not streamable', () => {
+        const queue = startAlbum(album(track(1, false), track(2)), 1);
+        expect(queue.current).toBe(0);
+    });
+
+    it('inserts play-next right after the current track', () => {
+        const queue = playNext(startAlbum(album(track(1), track(2), track(3)), 0), track(9));
+        expect(queue.tracks.map((t) => t.track.id)).toEqual([1, 9, 2, 3]);
+    });
+
+    it('appends add-to-queue at the end', () => {
+        const queue = addToQueue(startAlbum(album(track(1), track(2)), 0), track(9));
+        expect(queue.tracks.map((t) => t.track.id)).toEqual([1, 2, 9]);
+    });
+
+    it('skips forward and stops at the end', () => {
+        const queue = skip({ tracks: [{ track: track(1), albumId: 10 }, { track: track(2), albumId: 10 }], current: 1 });
+        expect(queue.current).toBe(1);
+    });
+
+    it('goes back and clamps at the start', () => {
+        const queue = previous({ tracks: [{ track: track(1), albumId: 10 }], current: 0 });
+        expect(queue.current).toBe(0);
+    });
+
+    it('startSingle makes a one-track queue', () => {
+        const queue = startSingle(track(7));
+        expect(queue.tracks.map((t) => t.track.id)).toEqual([7]);
+        expect(queue.current).toBe(0);
+    });
+});
