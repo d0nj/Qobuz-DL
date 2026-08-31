@@ -263,7 +263,7 @@ export function describeCatalogueItem(input: QobuzAlbum | QobuzTrack | QobuzArti
         samplingRate: record.maximum_sampling_rate,
         tracksCount: (record as QobuzAlbum).tracks_count,
         releasedYear: releasedAt ? new Date(releasedAt * 1000).getFullYear() : undefined,
-        image: (input as QobuzAlbum | QobuzArtist)?.image
+        image: artistKind ? (input as QobuzArtist)?.image : (album ?? (input as QobuzAlbum))?.image
     };
 }
 
