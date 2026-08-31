@@ -161,6 +161,7 @@ const renderCard = (result: QobuzAlbum | QobuzTrack) =>
 
 beforeEach(() => {
     hook = null;
+    toastErrors.length = 0;
     unwrapMock.mockClear();
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 404 } as unknown as Response)));
 });
@@ -200,6 +201,29 @@ describe('card play button', () => {
 
         expect(audio().src).toContain('id=2');
         expect(hook!.current?.track.id).toBe(2);
+        cleanup();
+    });
+
+    it('reports an album that has nothing streamable instead of doing nothing', async () => {
+        // Every track is unstreamable, so there is no track to hand the
+        // player. The tap must say so: a button that silently does nothing
+        // reads as a broken app, not as an unavailable release.
+        unwrapMock.mockImplementationOnce((path: string, options?: { params?: Record<string, unknown> }) =>
+            path.includes('album')
+                ? Promise.resolve({ ...album, tracks: { items: [track(1, 't1', false), track(2, 't2', false)] } })
+                : Promise.resolve({ url: `https://cdn.example.com/stream?id=${String(options?.params?.track_id ?? '?')}` })
+        );
+
+        renderCard(album);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', { name: "Play 'Album'" }));
+            await flush();
+        });
+
+        expect(toastErrors.length).toBeGreaterThan(0);
+        expect(hook!.state.queue).toBeNull();
+        expect(audio().src).toBe('');
         cleanup();
     });
 });

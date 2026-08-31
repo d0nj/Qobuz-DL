@@ -154,7 +154,12 @@ const ReleaseCard = ({
                                     className='size-11 touch-manipulation active:scale-95 transition-transform'
                                     onClick={async () => {
                                         const start = await trackToStart(item, fetchedAlbumData, setFetchedAlbumData, result, country);
-                                        if (!start) return;
+                                        if (!start) {
+                                            // Nothing streamable: the tap must say so rather than
+                                            // doing nothing, or the button reads as broken.
+                                            toast.error(`'${formatTitle(result)}' is not available to play.`);
+                                            return;
+                                        }
                                         play(start);
                                     }}
                                 >
