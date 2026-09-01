@@ -14,7 +14,7 @@ const StatusBarContainer = () => {
     return (
         <div
             className={cn(
-                'px-4 pb-4 pt-6 overflow-hidden mx-auto w-full fixed bottom-0 flex min-h-[156px] z-[20] justify-center bg-gradient-to-b from-transparent pointer-events-none to-background/70'
+                'px-4 pb-4 pt-6 overflow-hidden mx-auto w-full flex min-h-[156px] justify-center border-t border-border bg-background pointer-events-none'
             )}
         >
             <div className='container relative flex'>
