@@ -8,6 +8,11 @@ import { cn } from '@/lib/utils';
  * The download zone at the foot of the shell. It collapses to nothing when
  * there is no job: reserving its full height always would push the player
  * dock below the fold on a short page for no visible reason.
+ *
+ * The gate is `processing || open || complete`, not just `open`: `open` is
+ * false whenever the user last collapsed the bar (openPreference=false) or
+ * before the first job touches it, and a download must show its progress
+ * regardless of how the bar was left.
  */
 const StatusBarContainer = () => {
     const { statusBar } = useStatusBar();
@@ -17,7 +22,8 @@ const StatusBarContainer = () => {
         setIsMounted(true);
     }, []);
 
-    if (!isMounted || !statusBar.open) return null;
+    const active = statusBar.processing || statusBar.open || statusBar.complete;
+    if (!isMounted || !active) return null;
     return (
         <div
             className={cn(
