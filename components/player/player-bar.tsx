@@ -75,10 +75,10 @@ const PlayerBar = () => {
                         title={state.playing ? 'Pause' : 'Play'}
                         className='touch-manipulation active:scale-95 transition-transform'
                         onClick={(event) => {
-                                                        // The bar behind these buttons expands on tap; a
-                                                        // transport control must not also navigate.
-                                                        event.stopPropagation();
-                                                        toggle();
+                            // The bar behind these buttons expands on tap; a
+                            // transport control must not also navigate.
+                            event.stopPropagation();
+                            toggle();
                         }}
                     >
                         {state.playing ? <Pause /> : <Play />}
@@ -91,8 +91,8 @@ const PlayerBar = () => {
                         disabled={state.queue.current >= state.queue.tracks.length - 1}
                         className='touch-manipulation active:scale-95 transition-transform'
                         onClick={(event) => {
-                                                        event.stopPropagation();
-                                                        skipForward();
+                            event.stopPropagation();
+                            skipForward();
                         }}
                     >
                         <SkipForward />

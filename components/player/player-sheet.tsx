@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import LyricsView from '@/components/player/lyrics-view';
-import { usePlayer } from '@/lib/player/context';
+import { usePlayer, usePlayerPosition } from '@/lib/player/context';
 import { formatArtists, formatTitle } from '@/lib/qobuz-dl';
 
 /**
@@ -21,7 +21,8 @@ type PlayerSheetProps = {
 };
 
 const PlayerSheet = ({ open, onClose }: PlayerSheetProps) => {
-    const { state, current, toggle, seek, skipForward, skipBackward, syncedLyrics } = usePlayer();
+    const { state, current, toggle, seek, skipForward, skipBackward, syncedLyrics, plainLyrics } = usePlayer();
+    const position = usePlayerPosition();
     /** Where the thumb is being dragged, while it is being dragged. */
     const [scrub, setScrub] = useState<number | null>(null);
     if (!open || !state.queue || !current) return null;
@@ -69,7 +70,7 @@ const PlayerSheet = ({ open, onClose }: PlayerSheetProps) => {
                 </div>
                 <Slider
                     aria-label='Seek'
-                    value={[Math.min(scrub ?? state.position, duration)]}
+                    value={[Math.min(scrub ?? position, duration)]}
                     max={duration}
                     step={1}
                     onValueChange={(values) => setScrub(values[0] ?? 0)}
@@ -113,7 +114,7 @@ const PlayerSheet = ({ open, onClose }: PlayerSheetProps) => {
                         <SkipForward />
                     </Button>
                 </div>
-                <LyricsView syncedLyrics={syncedLyrics} position={state.position} />
+                <LyricsView syncedLyrics={syncedLyrics} plain={plainLyrics} position={position} />
             </div>
         </motion.div>
     );

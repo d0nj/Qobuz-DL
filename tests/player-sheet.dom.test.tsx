@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, beforeAll, afterAll } from 'vites
 import { act, render, cleanup, fireEvent, screen } from '@testing-library/react';
 import { useEffect } from 'react';
 import PlayerSheet from '@/components/player/player-sheet';
-import { PlayerProvider, usePlayer } from '@/lib/player/context';
+import { PlayerProvider, usePlayer, usePlayerPosition } from '@/lib/player/context';
 import { CountryProvider } from '@/lib/country-provider';
 import type { QobuzTrack } from '@/lib/qobuz-dl';
 
@@ -136,10 +136,13 @@ vi.mock('@/lib/api/client', () => ({
 }));
 
 let hook: ReturnType<typeof usePlayer> | null = null;
+let positionHook: ReturnType<typeof usePlayerPosition> | null = null;
 const Probe = () => {
     const value = usePlayer();
+    const position = usePlayerPosition();
     useEffect(() => {
         hook = value;
+        positionHook = position;
     });
     return null;
 };
@@ -153,6 +156,7 @@ beforeAll(() => {
 
 beforeEach(() => {
     hook = null;
+    positionHook = null;
     unwrapMock.mockClear();
     vi.stubGlobal(
         'fetch',
@@ -211,8 +215,8 @@ describe('PlayerSheet', () => {
             await flush();
         });
 
-        expect(hook!.state.position).toBeGreaterThan(0);
-        expect(audio().currentTime).toBe(hook!.state.position);
+        expect(positionHook!).toBeGreaterThan(0);
+        expect(audio().currentTime).toBe(positionHook!);
         cleanup();
     });
 
@@ -265,7 +269,7 @@ describe('PlayerSheet', () => {
             await flush();
         });
         expect(audio().currentTime).toBe(80);
-        expect(hook!.state.position).toBe(80);
+        expect(positionHook!).toBe(80);
         cleanup();
     });
 
@@ -301,6 +305,16 @@ describe('PlayerSheet', () => {
         const lines = document.querySelectorAll('[data-current]');
         expect(lines.length).toBe(2);
         expect(screen.getByText('one').getAttribute('data-current')).toBe('true');
+        cleanup();
+    });
+
+    it('renders plain lyrics as a static block when no synced variant exists', async () => {
+        // The words without timestamps: no highlight, no scroll, just text.
+        await mountSheet({ plainLyrics: 'plain line one\nplain line two', syncedLyrics: null });
+
+        expect(screen.getByText('plain line one')).toBeTruthy();
+        expect(screen.getByText('plain line two')).toBeTruthy();
+        expect(document.querySelector('[data-current]')).toBeNull();
         cleanup();
     });
 

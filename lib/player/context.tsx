@@ -23,6 +23,8 @@ export type PlayerContextValue = {
     skipForward: () => void;
     skipBackward: () => void;
     syncedLyrics: SyncedLyric[] | null;
+    /** Plain (unsynced) lyrics, or null when absent or a synced variant won. */
+    plainLyrics: string | null;
 };
 
 type LoadedTrack = { track: QobuzTrack; url: string };
@@ -31,6 +33,12 @@ type LoadedTrack = { track: QobuzTrack; url: string };
 const STREAM_QUALITY = '27';
 
 const PlayerContext = createContext<PlayerContextValue | undefined>(undefined);
+/**
+ * The playhead lives in its own context: `timeupdate` fires ~4Hz and would
+ * otherwise re-render every `usePlayer` consumer — including each
+ * ReleaseCard in the search grid — on every tick.
+ */
+const PositionContext = createContext<number | undefined>(undefined);
 
 /**
  * Resolves the album a track belongs to, or `null` when it cannot be reached.
@@ -70,12 +78,13 @@ function publishMetadata(track: QobuzTrack): void {
 }
 
 /**
- * Synced lyrics for a track, or null on every failure path.
+ * Synced and plain lyrics for a track, or null on every failure path.
  *
  * A lyrics miss must never interrupt playback, so lookup failures — offline,
- * malformed, no synced variant — are indistinguishable from "no entry".
+ * malformed, no entry — are indistinguishable from "no entry". Synced wins
+ * when both variants exist; plain is the fallback the sheet renders.
  */
-async function fetchSyncedLyrics(track: QobuzTrack): Promise<SyncedLyric[] | null> {
+async function fetchLyrics(track: QobuzTrack): Promise<{ synced: SyncedLyric[] | null; plain: string | null } | null> {
     try {
         const lyrics = await lrclib.fetchLyrics({
             artist: track.performer?.name ?? '',
@@ -83,7 +92,8 @@ async function fetchSyncedLyrics(track: QobuzTrack): Promise<SyncedLyric[] | nul
             album: track.album?.title,
             duration: track.duration
         });
-        return lyrics?.synced ? parseLrc(lyrics.synced) : null;
+        if (!lyrics) return null;
+        return { synced: lyrics.synced ? parseLrc(lyrics.synced) : null, plain: lyrics.synced ? null : lyrics.plain };
     } catch {
         // lrclib rejects on a network failure rather than returning null;
         // an escaped rejection here would surface as an unhandled one.
@@ -94,9 +104,11 @@ async function fetchSyncedLyrics(track: QobuzTrack): Promise<SyncedLyric[] | nul
 /** The queue as an index into `queue.tracks`, clamped to the tracks that exist. */
 const currentOf = (queue: PlayerQueue | null): PlayerTrack | null => queue?.tracks[queue.current] ?? null;
 
-function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>; value: PlayerContextValue } {
+function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>; value: PlayerContextValue; position: number } {
     const [state, setState] = useState<PlayerState>({ queue: null, playing: false, position: 0, duration: 0 });
+    const [position, setPosition] = useState(0);
     const [syncedLyrics, setSyncedLyrics] = useState<SyncedLyric[] | null>(null);
+    const [plainLyrics, setPlainLyrics] = useState<string | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     /**
      * Mirrors `state.queue` for the `ended`/`error` listeners, which are bound
@@ -138,6 +150,7 @@ function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>;
             if (!audio) return;
             audio.src = loaded.url;
             audio.currentTime = position;
+            setPosition(position);
             setState((prev) => ({ ...prev, playing: true, position, duration: loaded.track.duration ?? 0 }));
             try {
                 await audio.play();
@@ -151,8 +164,10 @@ function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>;
             // afterwards onto the new track's lyrics; the ref holds the track
             // the provider last committed to, so a stale answer is dropped.
             lyricsTrackIdRef.current = loaded.track.id;
-            void fetchSyncedLyrics(loaded.track).then((lyrics) => {
-                if (lyricsTrackIdRef.current === loaded.track.id) setSyncedLyrics(lyrics);
+            void fetchLyrics(loaded.track).then((lyrics) => {
+                if (lyricsTrackIdRef.current !== loaded.track.id) return;
+                setSyncedLyrics(lyrics?.synced ?? null);
+                setPlainLyrics(lyrics?.plain ?? null);
             });
         },
         []
@@ -160,10 +175,12 @@ function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>;
 
     /**
      * Loads the track at `index` in the current queue, advancing past tracks
-     * whose stream URL cannot be resolved and stopping at the end.
+     * whose stream URL cannot be resolved and stopping at the end. `resume`
+     * starts playback at a position instead of the top — the pause/toggle
+     * path hands over the playhead it had.
      */
     const loadAt = useCallback(
-        async (index: number) => {
+        async (index: number, resume: number = 0) => {
             const queue = queueRef.current;
             if (!queue) return;
             abortRef.current?.abort();
@@ -174,14 +191,16 @@ function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>;
             if (!target) {
                 setQueue({ ...queue, current: Math.max(index - 1, 0) });
                 setState((prev) => ({ ...prev, playing: false, position: 0 }));
+                setPosition(0);
                 return;
             }
 
             setQueue({ ...queue, current: index });
             setSyncedLyrics(null);
+            setPlainLyrics(null);
             const cached = urlCache.current.get(target.track.id);
             if (cached) {
-                await playTrack({ track: target.track, url: cached }, 0);
+                await playTrack({ track: target.track, url: cached }, resume);
                 void prefetch(index + 1);
                 return;
             }
@@ -198,12 +217,13 @@ function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>;
                     advancingRef.current = false;
                 } else {
                     setState((prev) => ({ ...prev, playing: false, position: 0 }));
+                    setPosition(0);
                 }
                 return;
             }
             if (controller.signal.aborted) return;
             urlCache.current.set(target.track.id, url);
-            await playTrack({ track: target.track, url }, 0);
+            await playTrack({ track: target.track, url }, resume);
             void prefetch(index + 1);
         },
         [setQueue, playTrack]
@@ -284,18 +304,29 @@ function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>;
     const toggle = useCallback(() => {
         const audio = audioRef.current;
         if (!audio || !queueRef.current) return;
+        const queue = queueRef.current;
         if (audio.paused) {
-            void playTrack({ track: queueRef.current.tracks[queueRef.current.current].track, url: audio.src }, audio.currentTime);
+            const target = queue.tracks[queue.current];
+            if (!target) return;
+            // The element can hold the previous track's bytes when the current
+            // one failed to load; resume must refetch in that case rather than
+            // replay stale bytes against the failed track's title.
+            if (urlCache.current.get(target.track.id) === audio.src) {
+                void playTrack({ track: target.track, url: audio.src }, audio.currentTime);
+                return;
+            }
+            void loadAt(queue.current, audio.currentTime);
             return;
         }
         audio.pause();
         setState((prev) => ({ ...prev, playing: false }));
-    }, [playTrack]);
+    }, [playTrack, loadAt]);
 
     const seek = useCallback((seconds: number) => {
         const audio = audioRef.current;
         if (!audio) return;
         audio.currentTime = seconds;
+        setPosition(seconds);
         setState((prev) => ({ ...prev, position: seconds }));
     }, []);
 
@@ -308,13 +339,19 @@ function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>;
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;
-        const onTimeUpdate = () => setState((prev) => ({ ...prev, position: audio.currentTime }));
+        const onTimeUpdate = () => setPosition(audio.currentTime);
         const onLoadedMetadata = () => setState((prev) => ({ ...prev, duration: audio.duration }));
         const onEnded = () => void loadAt((queueRef.current?.current ?? -1) + 1);
         const onPause = () => setState((prev) => ({ ...prev, playing: false }));
-        // Mid-stream failures take the documented skip path; at the queue end
-        // the chain stops instead of looping.
-        const onError = () => void loadAt((queueRef.current?.current ?? -1) + 1);
+        // A cached URL that went stale mid-stream is evicted before the skip,
+        // so returning to that track fetches a fresh one instead of replaying
+        // the dead URL.
+        const onError = () => {
+            const queue = queueRef.current;
+            const target = queue?.tracks[queue.current];
+            if (target) urlCache.current.delete(target.track.id);
+            void loadAt((queueRef.current?.current ?? -1) + 1);
+        };
 
         audio.addEventListener('timeupdate', onTimeUpdate);
         audio.addEventListener('loadedmetadata', onLoadedMetadata);
@@ -346,19 +383,23 @@ function usePlayerValue(): { audioRef: React.RefObject<HTMLAudioElement | null>;
                 seek,
                 skipForward,
                 skipBackward,
-                syncedLyrics
+                syncedLyrics,
+                plainLyrics
             }),
-            [state, play, playNextTrack, enqueue, toggle, seek, skipForward, skipBackward, syncedLyrics]
-        )
+            [state, play, playNextTrack, enqueue, toggle, seek, skipForward, skipBackward, syncedLyrics, plainLyrics]
+        ),
+        position
     };
 }
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { audioRef, value } = usePlayerValue();
+    const { audioRef, value, position } = usePlayerValue();
     return (
         <PlayerContext.Provider value={value}>
-            <audio ref={audioRef} preload='none' />
-            {children}
+            <PositionContext.Provider value={position}>
+                <audio ref={audioRef} preload='none' />
+                {children}
+            </PositionContext.Provider>
         </PlayerContext.Provider>
     );
 };
@@ -367,4 +408,14 @@ export function usePlayer(): PlayerContextValue {
     const context = useContext(PlayerContext);
     if (!context) throw new Error('usePlayer must be used within a PlayerProvider');
     return context;
+}
+
+/**
+ * The playhead in seconds. Reads from the fast-firing position context so a
+ * 4Hz tick re-renders only the components that show it, not every consumer.
+ */
+export function usePlayerPosition(): number {
+    const position = useContext(PositionContext);
+    if (position === undefined) throw new Error('usePlayerPosition must be used within a PlayerProvider');
+    return position;
 }

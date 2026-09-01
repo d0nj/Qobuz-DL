@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, beforeAll, afterAll } from 'vites
 import { act, render, cleanup, fireEvent, screen } from '@testing-library/react';
 import { useEffect } from 'react';
 import PlayerBar from '@/components/player/player-bar';
-import { PlayerProvider, usePlayer } from '@/lib/player/context';
+import { PlayerProvider, usePlayer, usePlayerPosition } from '@/lib/player/context';
 import { CountryProvider, useCountry } from '@/lib/country-provider';
 import type { QobuzTrack } from '@/lib/qobuz-dl';
 
@@ -111,10 +111,13 @@ vi.mock('@/lib/api/client', () => ({
  * side effect, so the capture happens in an effect.
  */
 let hook: ReturnType<typeof usePlayer> | null = null;
+let positionHook: ReturnType<typeof usePlayerPosition> | null = null;
 const Probe = () => {
     const value = usePlayer();
+    const position = usePlayerPosition();
     useEffect(() => {
         hook = value;
+        positionHook = position;
     });
     return null;
 };
@@ -215,7 +218,7 @@ describe('PlayerProvider', () => {
         });
 
         expect(hook!.state.duration).toBe(240);
-        expect(hook!.state.position).toBe(12.5);
+        expect(positionHook!).toBe(12.5);
         cleanup();
     });
 
@@ -236,7 +239,7 @@ describe('PlayerProvider', () => {
         });
 
         expect(audio().currentTime).toBe(42);
-        expect(hook!.state.position).toBe(42);
+        expect(positionHook!).toBe(42);
         cleanup();
     });
 
@@ -789,6 +792,237 @@ describe('PlayerProvider', () => {
             vi.unstubAllGlobals();
             cleanup();
         }
+    });
+
+    it('renders plain lyrics when only unsynced text exists', async () => {
+        // lrclib often holds the words but no timestamps. The listener still
+        // wants to read along; syncedLyrics stays null and plainLyrics carries
+        // the text.
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(() =>
+                Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve({ plainLyrics: 'plain line one\nplain line two', syncedLyrics: null })
+                } as unknown as Response)
+            )
+        );
+
+        render(
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
+        );
+
+        await act(async () => {
+            hook!.play(track);
+            await flush();
+        });
+
+        expect(hook!.syncedLyrics).toBeNull();
+        expect(hook!.plainLyrics).toBe('plain line one\nplain line two');
+        vi.unstubAllGlobals();
+        cleanup();
+    });
+
+    it('keeps plain lyrics out of the synced path and vice versa', async () => {
+        // Both present: synced wins, plain stays null. The sheet picks by
+        // what it renders, not by fallback order.
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(() =>
+                Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve({ plainLyrics: 'plain text', syncedLyrics: '[00:01.00] timed' })
+                } as unknown as Response)
+            )
+        );
+
+        render(
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
+        );
+
+        await act(async () => {
+            hook!.play(track);
+            await flush();
+        });
+
+        expect(hook!.syncedLyrics).toEqual([{ time: 1, line: 'timed' }]);
+        expect(hook!.plainLyrics).toBeNull();
+        vi.unstubAllGlobals();
+        cleanup();
+    });
+
+    it('refetches a stream URL whose cached copy has gone stale', async () => {
+        // Signed CDN URLs expire. When the element reports a mid-stream error
+        // on a cached URL, that cache entry must be dropped so a later return
+        // to the track fetches a fresh one instead of replaying the dead URL.
+        let urlCalls = 0;
+        const client = await import('@/lib/api/client');
+        const restoreClient = vi.spyOn(client, 'getApiClient').mockReturnValue({
+            unwrap: vi.fn().mockImplementation((path: string) => {
+                if (path.includes('album')) return Promise.resolve({ id: '10', tracks: { items: [track, { ...track, id: 2, title: 't2' }] } });
+                urlCalls += 1;
+                return Promise.resolve({ url: `https://cdn.example.com/stream?v=${urlCalls}` });
+            }),
+            routes: { album: '/api/get-album', download: '/api/download-music' }
+        } as unknown as ReturnType<typeof client.getApiClient>);
+
+        render(
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
+        );
+
+        try {
+            await act(async () => {
+                hook!.play(track);
+                await flush();
+            });
+            // Track 1's URL plus track 2's prefetch — both fetched once.
+            expect(urlCalls).toBe(2);
+            expect(audio().src).toContain('v=1');
+
+            // The element dies mid-stream on track 1's URL.
+            await act(async () => {
+                audio().dispatchEvent(new Event('error'));
+                await flush();
+            });
+            expect(hook!.state.queue?.current).toBe(1);
+
+            // Coming back to track 1 must be a fresh fetch, not the dead copy.
+            await act(async () => {
+                hook!.skipBackward();
+                await flush();
+            });
+            expect(urlCalls).toBe(3);
+            expect(audio().src).toContain('v=3');
+        } finally {
+            restoreClient.mockRestore();
+            cleanup();
+        }
+    });
+
+    it('reloads the failed track on toggle instead of replaying stale bytes', async () => {
+        // A track whose URL fetch failed leaves the element holding the
+        // previous track's URL while the queue points at the failed one.
+        // Toggle must reload the failed track, not play stale bytes against
+        // its title.
+        let failTrack2 = true;
+        const client = await import('@/lib/api/client');
+        const restoreClient = vi.spyOn(client, 'getApiClient').mockReturnValue({
+            unwrap: vi.fn().mockImplementation((path: string, options?: { params?: Record<string, unknown> }) => {
+                if (path.includes('album')) return Promise.resolve({ id: '10', tracks: { items: [track, { ...track, id: 2, title: 't2' }] } });
+                if (options?.params?.track_id === 2 && failTrack2) return Promise.reject(new Error('stream down'));
+                return Promise.resolve({ url: `https://cdn.example.com/fresh?id=${String(options?.params?.track_id)}` });
+            }),
+            routes: { album: '/api/get-album', download: '/api/download-music' }
+        } as unknown as ReturnType<typeof client.getApiClient>);
+
+        render(
+            <CountryProvider>
+                <PlayerProvider>
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
+        );
+
+        try {
+            await act(async () => {
+                hook!.play(track);
+                await flush();
+            });
+            expect(audio().src).toContain('id=1');
+
+            // Skip to track 2; its URL fetch fails and the queue stops on it.
+            await act(async () => {
+                hook!.skipForward();
+                await flush();
+            });
+            expect(hook!.state.queue?.current).toBe(1);
+            expect(hook!.state.playing).toBe(false);
+            // The element still holds track 1's URL — the stale bytes.
+            expect(audio().src).toContain('id=1');
+
+            // The user pauses, the fetch recovers, then hits play.
+            await act(async () => {
+                hook!.toggle();
+                await flush();
+            });
+            failTrack2 = false;
+            await act(async () => {
+                hook!.toggle();
+                await flush();
+            });
+            // Resume must reload track 2 from the network, not hand the
+            // element its stale track 1 URL back.
+            expect(audio().src).toContain('id=2');
+            expect(hook!.state.playing).toBe(true);
+        } finally {
+            restoreClient.mockRestore();
+            cleanup();
+        }
+    });
+
+    it('keeps the 4Hz playhead out of the transport context', async () => {
+        // timeupdate fires ~4×/s. If position lived in the main context,
+        // every consumer — every ReleaseCard in the search grid — would
+        // re-render on each tick. The playhead must move in its own context
+        // so only the components that read it re-render.
+        const transportRenders = { count: 0 };
+        const positionRenders = { count: 0 };
+        const TransportProbe = () => {
+            usePlayer();
+            useEffect(() => {
+                transportRenders.count += 1;
+            });
+            return null;
+        };
+        const PositionProbe = () => {
+            usePlayerPosition();
+            useEffect(() => {
+                positionRenders.count += 1;
+            });
+            return null;
+        };
+
+        render(
+            <CountryProvider>
+                <PlayerProvider>
+                    <TransportProbe />
+                    <PositionProbe />
+                    <Probe />
+                </PlayerProvider>
+            </CountryProvider>
+        );
+
+        await act(async () => {
+            hook!.play(track);
+            await flush();
+        });
+        const transportBefore = transportRenders.count;
+        const positionBefore = positionRenders.count;
+
+        for (const tick of [11, 12, 13]) {
+            await act(async () => {
+                Object.defineProperty(audio(), 'currentTime', { value: tick, configurable: true });
+                audio().dispatchEvent(new Event('timeupdate'));
+                await flush();
+            });
+        }
+
+        // The playhead moved three times...
+        expect(positionRenders.count - positionBefore).toBeGreaterThanOrEqual(3);
+        // ...without the transport context noticing.
+        expect(transportRenders.count).toBe(transportBefore);
     });
 });
 
