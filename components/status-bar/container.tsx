@@ -26,9 +26,8 @@ const StatusBarContainer = () => {
     if (!isMounted || !active) return null;
     return (
         <div
-            className={cn(
-                'px-4 pb-4 pt-6 overflow-hidden mx-auto w-full flex min-h-[156px] justify-center border-t border-border bg-background pointer-events-none'
-            )}
+            data-testid='download-zone'
+            className={cn('px-4 pb-4 pt-4 overflow-hidden mx-auto w-full flex justify-center border-b border-border/60 bg-background pointer-events-none')}
         >
             <div className='container relative flex'>
                 <StatusBar />

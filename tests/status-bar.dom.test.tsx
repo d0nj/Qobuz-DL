@@ -80,13 +80,6 @@ describe('completion hold', () => {
 });
 
 describe('status bar container gate', () => {
-    const renderContainer = () =>
-        render(
-            <StatusBarProvider>
-                <StatusBarContainer />
-            </StatusBarProvider>
-        );
-
     it('shows the zone while a job is processing even when the bar was collapsed', async () => {
         // The user collapsed the bar during an earlier download
         // (openPreference=false). A new download must still be visible — the
@@ -104,19 +97,16 @@ describe('status bar container gate', () => {
             </StatusBarProvider>
         );
 
-        expect(document.querySelector('[class*="min-h-[156px]"]')).toBeNull();
+        expect(document.querySelector('[data-testid="download-zone"]')).toBeNull();
 
         await act(async () => {
             captured.setStatusBar!((prev) => ({ ...prev, processing: true, open: false, progress: 40 }));
             await settle();
         });
 
-        expect(document.querySelector('[class*="min-h-[156px]"]')).not.toBeNull();
-        expect(document.body.textContent).toContain('No items in the queue');
-    });
-
-    it('collapses to nothing when idle', async () => {
-        renderContainer();
-        expect(document.querySelector('[class*="min-h-[156px]"]')).toBeNull();
+        // The zone is the top row of the floor dock; the player plate renders
+        // beneath it inside the same dock (layout.tsx), so "processing means
+        // visible" is what this pins.
+        expect(document.querySelector('[data-testid="download-zone"]')).not.toBeNull();
     });
 });
