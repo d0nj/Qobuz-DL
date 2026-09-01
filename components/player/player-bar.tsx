@@ -14,6 +14,11 @@ import { formatArtists, formatTitle } from '@/lib/qobuz-dl';
  * the page floor — nothing floats over the gallery, nothing is stacked on the
  * content. The expanded sheet grows the same column above the bar.
  *
+ * `sticky bottom-0` keeps it pinned to the viewport bottom while the page is
+ * taller than the screen, without ever leaving the flow: when the user reaches
+ * the end of the document the bar is simply the last thing there, not a
+ * floating panel covering the last row of results.
+ *
  * The bar is a view over `usePlayer()` and owns nothing: it renders the
  * current track, forwards transport intents straight to the context, and
  * holds only the local flag for whether the expanded sheet is open.
@@ -35,7 +40,7 @@ const PlayerBar = () => {
     const artist = formatArtists(track);
 
     return (
-        <div className='pointer-events-none mx-auto flex w-full max-w-screen flex-col gap-2 px-4 pb-4'>
+        <div className='pointer-events-none sticky bottom-0 mx-auto flex w-full max-w-screen flex-col gap-2 px-4 pb-4'>
             <PlayerSheet open={expanded} onClose={() => setExpanded(false)} />
             <motion.div
                 data-testid='player-bar'
